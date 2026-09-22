@@ -17,22 +17,30 @@ function sha8(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 8);
 }
 
-export function segmentIntoAttempts(events: SanitizedReplayEvent[]): ReplayAttempt[] {
-  const attempts: ReplayAttempt[] = [];
+export interface AttemptWindow {
+  implementationEvents: number;
+  verifications: SanitizedReplayEvent[];
+  timestampOffset: number | null;
+  changeSetHash: string | null;
+}
 
-  interface Window {
+export interface Segmentation {
+  attempts: ReplayAttempt[];
+  windows: AttemptWindow[];
+}
+
+export function segmentWithWindows(events: SanitizedReplayEvent[]): Segmentation {
+  const attempts: ReplayAttempt[] = [];
+  const windows: AttemptWindow[] = [];
+
+  interface OpenWindow {
     implementationEvents: number;
     changedFilePathHashes: Set<string>;
-    verification: Array<{
-      kind: SanitizedReplayEvent['verificationKind'];
-      ok: boolean | null;
-      failureSignatureHash: string | null;
-      testsFailedCount: number | null;
-    }>;
+    verification: SanitizedReplayEvent[];
     timestampOffset: number | null;
   }
 
-  const open: Window = {
+  const open: OpenWindow = {
     implementationEvents: 0,
     changedFilePathHashes: new Set<string>(),
     verification: [],
@@ -40,14 +48,27 @@ export function segmentIntoAttempts(events: SanitizedReplayEvent[]): ReplayAttem
   };
 
   const flush = (): void => {
-    if (open.implementationEvents === 0) return; // no implementation => not an attempt
+    if (open.implementationEvents === 0) {
+      // Pre-attempt verification (a failing test before any edit): context
+      // only — discard so it never attaches to a later attempt.
+      open.verification = [];
+      return;
+    }
 
-    const lastTest = [...open.verification].reverse().find((v) => v.kind === 'test');
-    const lastBuild = [...open.verification].reverse().find((v) => v.kind === 'build');
+    const lastTest = [...open.verification].reverse().find((v) => v.verificationKind === 'test');
+    const lastBuild = [...open.verification].reverse().find((v) => v.verificationKind === 'build');
     const failedVerification = open.verification.find((v) => v.ok === false);
     const paths = [...open.changedFilePathHashes].sort();
+    const changeSetHash = paths.length > 0 ? sha8(paths.join('\n')) : null;
 
-    attempts.push({
+    // A passing test run means zero failing tests, even when the runner did
+    // not print a count (same inference as the POC-02 transcript parser).
+    const testsFailedCount =
+      lastTest !== undefined && lastTest.ok === true && lastTest.testsFailedCount === null
+        ? 0
+        : (lastTest?.testsFailedCount ?? null);
+
+    const attempt: ReplayAttempt = {
       index: attempts.length,
       evidence: {
         attemptId: `attempt-${attempts.length + 1}`,
@@ -60,20 +81,27 @@ export function segmentIntoAttempts(events: SanitizedReplayEvent[]): ReplayAttem
                 : 'unknown'
             : null,
         },
-        tests: { failedCount: lastTest ? lastTest.testsFailedCount : null },
+        tests: { failedCount: testsFailedCount },
         runtime: { crashSignature: null, screenSignature: null },
         verification: { performed: open.verification.length > 0 },
         code: {
           changedFilesCount: paths.length,
-          changeSetHash: paths.length > 0 ? sha8(paths.join('\n')) : null,
+          changeSetHash,
         },
       },
       failureSignatureHash: failedVerification?.failureSignatureHash ?? null,
       verificationKinds: open.verification
-        .map((v) => v.kind)
+        .map((v) => v.verificationKind)
         .filter((kind): kind is NonNullable<typeof kind> => kind !== null),
       implementationEvents: open.implementationEvents,
       timestampOffset: open.timestampOffset,
+    };
+    attempts.push(attempt);
+    windows.push({
+      implementationEvents: open.implementationEvents,
+      verifications: [...open.verification],
+      timestampOffset: open.timestampOffset,
+      changeSetHash,
     });
 
     open.implementationEvents = 0;
@@ -89,16 +117,15 @@ export function segmentIntoAttempts(events: SanitizedReplayEvent[]): ReplayAttem
       if (event.changeSetHash !== null) open.changedFilePathHashes.add(event.changeSetHash);
       if (open.timestampOffset === null) open.timestampOffset = event.timestampOffset;
     } else if (event.eventType === 'verification') {
-      open.verification.push({
-        kind: event.verificationKind,
-        ok: event.ok,
-        failureSignatureHash: event.failureSignatureHash,
-        testsFailedCount: event.testsFailedCount,
-      });
+      open.verification.push(event);
     }
     // observation/other events are context only — they neither start nor end attempts
   }
   flush(); // trailing implementations without verification => verification debt
 
-  return attempts;
+  return { attempts, windows };
+}
+
+export function segmentIntoAttempts(events: SanitizedReplayEvent[]): ReplayAttempt[] {
+  return segmentWithWindows(events).attempts;
 }

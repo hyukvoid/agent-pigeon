@@ -14,7 +14,8 @@
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
     "poc:00": "npm run build && node dist/src/cli.js",
     "poc:01": "npm run build && node dist/src/poc01.js",
-    "poc:02": "npm run build && node dist/src/poc02.js"
+    "poc:02": "npm run build && node dist/src/poc02.js",
+    "poc:03": "npm run build && node dist/src/poc03.js"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
