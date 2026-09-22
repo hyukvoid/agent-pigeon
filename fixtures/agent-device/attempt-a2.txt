@@ -1,0 +1,15 @@
+# agent-device recording — scenario A, attempt a2
+# Same command shapes, next attempt: the login crash is gone, the app now
+# reaches the OTP screen and fails later in the flow.
+$ agent-device snapshot
+# window "OTP"
+# @e1 [static-text] "Enter the 6-digit code we sent you"
+# @e2 [text-field] "Code" value=""
+# @e3 [button] "Verify"
+
+$ agent-device logs stop
+09-22 14:05:47.884  3121  3121 E AndroidRuntime: FATAL EXCEPTION: main
+09-22 14:05:47.884  3121  3121 E AndroidRuntime: Process: com.pigeon.demo, PID: 3121
+09-22 14:05:47.885  3121  3121 E AndroidRuntime: java.lang.IllegalStateException: OTP session expired before verify() was called
+09-22 14:05:47.885  3121  3121 E AndroidRuntime: 	at com.pigeon.demo.ui.otp.OtpViewModel.verify(OtpViewModel.kt:57)
+09-22 14:05:47.885  3121  3121 E AndroidRuntime: 	at android.view.View.performClick(View.java:7448)
