@@ -42,7 +42,7 @@ describe('poc:03 live worker', () => {
     assert.equal(first.evidence.tests.failedCount, 1, 'pre-attempt baseline run must not attach');
     assert.equal(second.evidence.tests.failedCount, 0, 'passing run infers zero failures');
     assert.equal(second.evidence.verification.performed, true);
-    assert.equal(parsed.evaluation.policy, 'CONTINUE');
+    assert.equal(parsed.evaluation.policy, 'OBSERVE');
   });
 
   it('flags a no-verification edit stream as verification debt', () => {

@@ -18,21 +18,24 @@ function loadFixture(name: string): AttemptEvidence[] {
 }
 
 describe('scenario evaluation', () => {
-  it('A — productive progress: HIGH gain, HIGH progress, CONTINUE', () => {
+  it('A — productive progress: HIGH gain, MULTIPLE runtime change, OBSERVE (no contract → goal UNKNOWN)', () => {
     const { signals, evaluation } = evaluateScenario(loadFixture('fixture-a.json'));
     assert.equal(signals.verificationDebt, 'LOW');
     assert.equal(evaluation.evidenceGain, 'HIGH');
-    assert.equal(evaluation.runtimeProgress, 'HIGH');
+    assert.equal(evaluation.runtimeChange, 'MULTIPLE');
+    // POC-03.5: without a ProgressContract, goal progress stays UNKNOWN even
+    // when everything moved — movement alone is not progress.
+    assert.equal(evaluation.goalProgress.level, 'UNKNOWN');
     assert.equal(evaluation.deadEndCandidate, false);
-    assert.equal(evaluation.policy, 'CONTINUE');
-    assert.match(evaluation.verdict, /Productive progress/u);
+    assert.equal(evaluation.policy, 'OBSERVE');
   });
 
   it('B — different code, same app: dead-end, RETHINK', () => {
     const { signals, evaluation } = evaluateScenario(loadFixture('fixture-b.json'));
     assert.equal(signals.verificationDebt, 'LOW');
     assert.equal(evaluation.evidenceGain, 'LOW');
-    assert.equal(evaluation.runtimeProgress, 'LOW');
+    assert.equal(evaluation.runtimeChange, 'NONE');
+    assert.equal(evaluation.goalProgress.level, 'UNKNOWN', 'no contract supplied');
     assert.equal(evaluation.deadEndCandidate, true);
     assert.equal(evaluation.policy, 'RETHINK');
     assert.equal(evaluation.verdict, '⚠ Different code. Same app.');

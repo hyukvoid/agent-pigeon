@@ -95,8 +95,13 @@ export function renderScenario(input: ScenarioReportInput): string {
   );
   lines.push('');
   lines.push(`${label('Verification debt')}${signals.verificationDebt}`);
+  lines.push(
+    `${label('Runtime change')}${evaluation.runtimeChange}${evaluation.runtimeChangeDetail.length > 0 ? ` (${evaluation.runtimeChangeDetail.join('; ')})` : ''}`,
+  );
   lines.push(`${label('Evidence gain')}${evaluation.evidenceGain}`);
-  lines.push(`${label('Runtime progress')}${evaluation.runtimeProgress}`);
+  lines.push(
+    `${label('Goal progress')}${evaluation.goalProgress.level} — ${truncateForDisplay(evaluation.goalProgress.rationale, 60)}`,
+  );
   if (evaluation.deadEndCandidate) {
     lines.push(`${label('Dead-end candidate')}YES`);
   }
