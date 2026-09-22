@@ -1,0 +1,44 @@
+{
+  "contract": {
+    "task": "Fix crash after Sign In",
+    "crashMustDisappear": true,
+    "baselineScreenSignature": "Login",
+    "testsMustDecrease": true,
+    "usefulEvidenceSignals": ["failure moves deeper", "crash signature changes"],
+    "noProgressSignals": ["same crash", "same screen", "same failed tests"]
+  },
+  "attempts": [
+    {
+      "attemptId": "rd1",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": null },
+      "runtime": { "crashSignature": null, "screenSignature": null },
+      "verification": { "performed": false },
+      "code": { "changedFilesCount": 2, "changeSetHash": "fp:11aa22" }
+    },
+    {
+      "attemptId": "rd2",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": null },
+      "runtime": { "crashSignature": null, "screenSignature": null },
+      "verification": { "performed": false },
+      "code": { "changedFilesCount": 4, "changeSetHash": "fp:33bb44" }
+    },
+    {
+      "attemptId": "rd3",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": null },
+      "runtime": { "crashSignature": null, "screenSignature": null },
+      "verification": { "performed": false },
+      "code": { "changedFilesCount": 1, "changeSetHash": "fp:55cc66" }
+    },
+    {
+      "attemptId": "rd4",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": null },
+      "runtime": { "crashSignature": null, "screenSignature": null },
+      "verification": { "performed": false },
+      "code": { "changedFilesCount": 3, "changeSetHash": "fp:77dd88" }
+    }
+  ]
+}

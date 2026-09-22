@@ -1,0 +1,8 @@
+Page: com.android.settings
+App: com.android.settings
+Snapshot: 12 visible nodes (29 total)
+Collapsed 17 Android helper nodes from the agent-facing text snapshot; use --raw or --json for the full hierarchy.
+@e1 [scroll-area] "com.android.settings:id/content_parent" [scrollable]
+  [content above scroll-area hidden]
+@e2 [button] "위로 탐색"
+@e3 [list] "모바일 네트워크 보안, 네트워크 유형, 암호화, 알림 설정, 스마트 연결, 사용, 비공개 DNS, 자동, VPN, 없음, 데이터 절약 모드, 사용 안함, 핫스팟 및 테더링, 비행기 모드, SIM, T-Mobile, 인터넷, AndroidWifi"
