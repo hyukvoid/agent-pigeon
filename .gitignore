@@ -1,0 +1,13 @@
+# secrets & private session data — never commit
+.env
+.env.*
+*.session.log
+
+# build & tooling
+node_modules/
+dist/
+*.tsbuildinfo
+
+# OS noise
+.DS_Store
+*.log

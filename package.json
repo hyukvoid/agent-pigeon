@@ -1,0 +1,21 @@
+{
+  "name": "agent-pigeon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Proof-of-progress for mobile coding agents.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/",
+    "poc:00": "npm run build && node dist/src/cli.js"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  }
+}
