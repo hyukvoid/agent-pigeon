@@ -31,7 +31,7 @@ function hmacFingerprint(secret: string, canonical: string): string {
   return createHmac('sha256', secret).update(canonical, 'utf8').digest('hex').slice(0, 32);
 }
 
-export type ChangeOperation = 'edit' | 'write' | 'notebook' | 'multi-edit';
+export type ChangeOperation = 'edit' | 'write' | 'notebook' | 'multi-edit' | 'patch';
 
 /** Content fingerprint: HMAC-SHA256(128-bit) over the canonical change payload. */
 export function contentFingerprint(

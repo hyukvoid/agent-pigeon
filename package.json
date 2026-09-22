@@ -17,7 +17,8 @@
     "poc:02": "npm run build && node dist/src/poc02.js",
     "poc:03": "npm run build && node dist/src/poc03.js",
     "poc:035": "npm run build && node dist/src/poc035.js",
-    "governor:process": "npm run build && node dist/src/governor-process.js"
+    "governor:process": "npm run build && node dist/src/governor-process.js",
+    "poc:04b": "npm run build && node --max-old-space-size=4096 dist/src/poc04b.js"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
