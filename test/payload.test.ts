@@ -33,6 +33,7 @@ describe('Jev payload', () => {
     assert.doesNotMatch(serialized, /\/(?:home|Users|root|tmp)\//u);
     assert.doesNotMatch(serialized, /api[_-]?key|password|secret|authorization/iu);
     assert.ok(!serialized.includes('changeSetHash'), 'internal fields must not leak into payload');
+    assert.doesNotMatch(serialized, /"[0-9a-f]{32}"/u, 'change fingerprints never travel to Jev');
   });
 
   it('carries the three independent questions', () => {

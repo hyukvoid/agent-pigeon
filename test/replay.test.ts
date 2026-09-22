@@ -120,10 +120,17 @@ describe('attempt segmentation', () => {
     const raw = readFileSync(join(fixturesRoot, 'replay', 'sanitized-415efbff.json'), 'utf8');
     assert.doesNotMatch(raw, /[A-Za-z]:\\\\/u);
     assert.doesNotMatch(raw, /"command"|stdout|stderr|file_path|prompt/iu);
-    // every hash field must be a short hex string or null
-    for (const match of raw.matchAll(/"(?:changeSetHash|failureSignatureHash)":\s*("[^"]*"|null)/gu)) {
-      const value = match[1] ?? '';
-      if (value !== 'null') assert.match(value, /^"[0-9a-f]{8}"$/u);
+    // every hash field must be exactly the right digest length or null:
+    // changeSetHash = 128-bit HMAC (32 hex), failureSignatureHash = 8 hex
+    for (const match of raw.matchAll(/"(changeSetHash|failureSignatureHash)":\s*("[^"]*"|null)/gu)) {
+      const field = match[1] ?? '';
+      const value = match[2] ?? '';
+      if (value !== 'null') {
+        assert.match(
+          value,
+          field === 'changeSetHash' ? /^"[0-9a-f]{32}"$/u : /^"[0-9a-f]{8}"$/u,
+        );
+      }
     }
   });
 });

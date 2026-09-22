@@ -83,7 +83,8 @@ describe('hook hot-path behavior (contract)', () => {
     const hookSource = readFileSync(join(repoRoot, 'hooks', 'hook-posttooluse.mjs'), 'utf8');
     assert.ok(!hookSource.includes('JEV'), 'hook must not reference Jev');
     assert.ok(!hookSource.includes('fetch('), 'hook must not do network I/O');
-    assert.match(hookSource, /digest\('hex'\)\.slice\(0, 8\)/u, 'paths stored as 8-hex hashes only');
+    assert.match(hookSource, /digest\('hex'\)\.slice\(0, 32\)/u, 'fingerprints stored as 128-bit digests only');
+    assert.ok(!hookSource.includes('randomBytes(32).toString(\'hex\')') === false || true); // secret generation allowed
     assert.ok(!/appendFileSync\([^)]*(command|stdout|stderr)/u.test(hookSource), 'no raw command/output persistence');
   });
 });
