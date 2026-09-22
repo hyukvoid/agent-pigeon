@@ -1,0 +1,430 @@
+{
+  "sessionId8": "415efbff",
+  "events": [
+    {
+      "eventType": "observation",
+      "timestampOffset": 19263,
+      "toolName": "Read",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 19723,
+      "toolName": "Read",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 19908,
+      "toolName": "Read",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 20000,
+      "toolName": "Read",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 20296,
+      "toolName": "Read",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 91134,
+      "toolName": "Grep",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 92152,
+      "toolName": "Glob",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 92243,
+      "toolName": "Glob",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 104034,
+      "toolName": "Grep",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 104126,
+      "toolName": "Glob",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 113802,
+      "toolName": "Grep",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 119207,
+      "toolName": "Read",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 124042,
+      "toolName": "Grep",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 228268,
+      "toolName": "TodoWrite",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 240013,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "f22d399c",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 247982,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "f22d399c",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 272271,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "d34ed91f",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 313956,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "bc785b53",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 321803,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "bc785b53",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 328393,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "bc785b53",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 341112,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "bc785b53",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 356456,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "bc785b53",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 370694,
+      "toolName": "TodoWrite",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 378846,
+      "toolName": "Grep",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 384232,
+      "toolName": "Read",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "observation",
+      "timestampOffset": 390974,
+      "toolName": "Read",
+      "ok": null,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 398846,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "bc785b53",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 405971,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "bc785b53",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "implementation",
+      "timestampOffset": 428136,
+      "toolName": "Edit",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": 1,
+      "changeSetHash": "1825d0ad",
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "other",
+      "timestampOffset": 434657,
+      "toolName": "Bash",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "other",
+      "timestampOffset": 444050,
+      "toolName": "Bash",
+      "ok": false,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "other",
+      "timestampOffset": 477052,
+      "toolName": "Bash",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    },
+    {
+      "eventType": "other",
+      "timestampOffset": 483031,
+      "toolName": "Bash",
+      "ok": true,
+      "verificationKind": null,
+      "changedFilesCount": null,
+      "changeSetHash": null,
+      "failureSignatureHash": null,
+      "testsFailedCount": null,
+      "durationMs": null
+    }
+  ],
+  "attempts": [
+    {
+      "index": 0,
+      "evidence": {
+        "attemptId": "attempt-1",
+        "build": {
+          "status": null
+        },
+        "tests": {
+          "failedCount": null
+        },
+        "runtime": {
+          "crashSignature": null,
+          "screenSignature": null
+        },
+        "verification": {
+          "performed": false
+        },
+        "code": {
+          "changedFilesCount": 4,
+          "changeSetHash": "f33a3b96"
+        }
+      },
+      "failureSignatureHash": null,
+      "verificationKinds": [],
+      "implementationEvents": 11,
+      "timestampOffset": 240013
+    }
+  ]
+}
