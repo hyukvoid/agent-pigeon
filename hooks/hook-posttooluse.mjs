@@ -22,6 +22,8 @@ import { createHash } from 'node:crypto';
 const EVENTS_FILE =
   process.env.AGENT_PIGEON_EVENTS ?? join(homedir(), '.agent-pigeon', 'events.jsonl');
 
+const IMPLEMENTATION_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+
 const TEST_PATTERN =
   /\b(npm (?:run )?test|pnpm (?:run )?test|yarn test|jest\b|vitest\b|pytest\b|node --test\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b)/i;
 const DEVICE_PATTERN = /\b(adb(?:\.exe)?\s|agent-device\s|emulator\s|maestro\s)/i;
@@ -35,6 +37,52 @@ function classifyCommand(command) {
   return 'other';
 }
 
+// --- changeFingerprint (POC-03.5 §1) -------------------------------------
+// Mirrors src/replay/fingerprint.ts (contract-tested). Hashes the NORMALIZED
+// change CONTENT so "same file, different patch" is novel; only the 8-hex
+// digest is stored — raw source/edit text never persists and never reaches
+// Jev or any network.
+
+function sha8(text) {
+  return createHash('sha256').update(text).digest('hex').slice(0, 8);
+}
+
+function normalizeChangePayload(text) {
+  return String(text).replace(/\s+/gu, ' ').trim();
+}
+
+function fingerprintParts(parts) {
+  return sha8(parts.map((p) => normalizeChangePayload(p)).join('\u0000'));
+}
+
+function changeIdentity(toolName, input) {
+  const pathHash =
+    typeof input?.file_path === 'string' && input.file_path.length > 0
+      ? sha8(input.file_path)
+      : null;
+
+  let parts = null;
+  if (toolName === 'Edit' && typeof input?.old_string === 'string' && typeof input?.new_string === 'string') {
+    parts = [input.old_string, input.new_string];
+  } else if (toolName === 'Write' && typeof input?.content === 'string') {
+    parts = [input.content];
+  } else if (toolName === 'NotebookEdit' && typeof input?.new_source === 'string') {
+    parts = [input.new_source];
+  } else if (toolName === 'MultiEdit' && Array.isArray(input?.edits) && input.edits.length > 0) {
+    parts = input.edits.flatMap((e) =>
+      e && typeof e.old_string === 'string' && typeof e.new_string === 'string'
+        ? [e.old_string, e.new_string]
+        : [],
+    );
+    if (parts.length === 0) parts = null;
+  }
+
+  if (parts !== null) {
+    return { changeFingerprint: fingerprintParts(parts), fingerprintBasis: 'content', fileHash: pathHash };
+  }
+  return { changeFingerprint: pathHash, fingerprintBasis: pathHash !== null ? 'path' : null, fileHash: pathHash };
+}
+
 let raw = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
@@ -45,10 +93,9 @@ process.stdin.on('end', () => {
     const input = JSON.parse(raw);
     const toolName = typeof input.tool_name === 'string' ? input.tool_name : 'unknown';
 
-    let fileHash = null;
-    const filePath = input.tool_input?.file_path;
-    if (typeof filePath === 'string' && filePath.length > 0) {
-      fileHash = createHash('sha256').update(filePath).digest('hex').slice(0, 8);
+    let change = { changeFingerprint: null, fingerprintBasis: null, fileHash: null };
+    if (IMPLEMENTATION_TOOLS.has(toolName)) {
+      change = changeIdentity(toolName, input.tool_input ?? {});
     }
 
     let verificationKind = null;
@@ -76,7 +123,9 @@ process.stdin.on('end', () => {
       sessionId: typeof input.session_id === 'string' ? input.session_id.slice(0, 8) : null,
       toolName,
       ok,
-      fileHash,
+      fileHash: change.fileHash,
+      changeFingerprint: change.changeFingerprint,
+      fingerprintBasis: change.fingerprintBasis,
       verificationKind,
       testsFailedCount,
     };

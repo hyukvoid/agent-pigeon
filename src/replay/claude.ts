@@ -8,6 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { changeFingerprint } from './fingerprint.js';
 import type { SanitizedReplayEvent, VerificationKind } from './types.js';
 import { IMPLEMENTATION_TOOLS } from './types.js';
 
@@ -108,6 +109,57 @@ interface ToolResultContent {
   text?: string;
 }
 
+/** Change-content fields carried by implementation tool inputs. */
+interface ImplementationInput {
+  file_path?: string | string[];
+  old_string?: string;
+  new_string?: string;
+  content?: string;
+  new_source?: string;
+  edits?: Array<{ old_string?: string; new_string?: string }>;
+}
+
+/**
+ * Content-based changeFingerprint for an implementation call (POC-03.5 §1).
+ * Prefers the normalized edit/content payload so "same file, different patch"
+ * hashes differently; falls back to the path-list hash when no content is
+ * available. The content itself is hashed and immediately discarded.
+ */
+function changeIdentityFromInput(input: ImplementationInput): {
+  count: number | null;
+  hash: string | null;
+  basis: 'content' | 'path' | null;
+} {
+  const paths: string[] = [];
+  if (typeof input.file_path === 'string') paths.push(input.file_path);
+  else if (Array.isArray(input.file_path)) {
+    paths.push(...input.file_path.filter((p): p is string => typeof p === 'string'));
+  }
+  const unique = [...new Set(paths)];
+  const pathHash = unique.length > 0 ? sha8([...unique].sort().join('\n')) : null;
+
+  let contentParts: string[] | null = null;
+  if (typeof input.old_string === 'string' && typeof input.new_string === 'string') {
+    contentParts = [input.old_string, input.new_string];
+  } else if (typeof input.content === 'string') {
+    contentParts = [input.content];
+  } else if (typeof input.new_source === 'string') {
+    contentParts = [input.new_source];
+  } else if (Array.isArray(input.edits) && input.edits.length > 0) {
+    contentParts = input.edits.flatMap((e) =>
+      typeof e.old_string === 'string' && typeof e.new_string === 'string'
+        ? [e.old_string, e.new_string]
+        : [],
+    );
+    if (contentParts.length === 0) contentParts = null;
+  }
+
+  if (contentParts !== null) {
+    return { count: unique.length > 0 ? unique.length : null, hash: changeFingerprint(contentParts), basis: 'content' };
+  }
+  return { count: unique.length > 0 ? unique.length : null, hash: pathHash, basis: pathHash !== null ? 'path' : null };
+}
+
 function contentText(content: string | ToolResultContent[] | undefined): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
@@ -116,22 +168,6 @@ function contentText(content: string | ToolResultContent[] | undefined): string 
       .join('\n');
   }
   return '';
-}
-
-function changedFilesFromInput(input: { file_path?: string | string[] }): {
-  count: number | null;
-  hash: string | null;
-} {
-  const paths: string[] = [];
-  if (typeof input.file_path === 'string') paths.push(input.file_path);
-  else if (Array.isArray(input.file_path)) {
-    paths.push(...input.file_path.filter((p): p is string => typeof p === 'string'));
-  }
-  const unique = [...new Set(paths)];
-  return {
-    count: unique.length > 0 ? unique.length : null,
-    hash: unique.length > 0 ? sha8([...unique].sort().join('\n')) : null,
-  };
 }
 
 /** Parse one session JSONL (as a string) into sanitized events + meta. */
@@ -149,7 +185,11 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
   /** tool_use_id -> in-flight call (toolName + kind), for pairing results. */
   const pending = new Map<
     string,
-    { toolName: string; verificationKind: VerificationKind | null; change: { count: number | null; hash: string | null } }
+    {
+      toolName: string;
+      verificationKind: VerificationKind | null;
+      change: { count: number | null; hash: string | null; basis: 'content' | 'path' | null };
+    }
   >();
 
   for (const line of lines) {
@@ -184,7 +224,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
       if (obj.type === 'assistant' && block.type === 'tool_use' && typeof block.name === 'string') {
         const toolName = block.name;
         if (IMPLEMENTATION_TOOLS.includes(toolName)) {
-          const change = changedFilesFromInput((block.input ?? {}) as { file_path?: string | string[] });
+          const change = changeIdentityFromInput((block.input ?? {}) as ImplementationInput);
           const id = (block as unknown as { id?: string }).id ?? '';
           pending.set(id, { toolName, verificationKind: null, change });
           events.push({
@@ -195,6 +235,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
             verificationKind: null,
             changedFilesCount: change.count,
             changeSetHash: change.hash,
+            fingerprintBasis: change.basis,
             failureSignatureHash: null,
             testsFailedCount: null,
             durationMs: null,
@@ -205,7 +246,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
             : '';
           const verificationKind = classifyVerificationCommand(command);
           const id = (block as unknown as { id?: string }).id ?? '';
-          pending.set(id, { toolName, verificationKind, change: { count: null, hash: null } });
+          pending.set(id, { toolName, verificationKind, change: { count: null, hash: null, basis: null } });
           if (verificationKind !== null) {
             events.push({
               eventType: 'verification',
@@ -215,6 +256,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
               verificationKind,
               changedFilesCount: null,
               changeSetHash: null,
+            fingerprintBasis: null,
               failureSignatureHash: null,
               testsFailedCount: null,
               durationMs: null,
@@ -228,6 +270,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
               verificationKind: null,
               changedFilesCount: null,
               changeSetHash: null,
+            fingerprintBasis: null,
               failureSignatureHash: null,
               testsFailedCount: null,
               durationMs: null,
@@ -242,6 +285,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
             verificationKind: null,
             changedFilesCount: null,
             changeSetHash: null,
+            fingerprintBasis: null,
             failureSignatureHash: null,
             testsFailedCount: null,
             durationMs: null,

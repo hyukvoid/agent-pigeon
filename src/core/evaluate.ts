@@ -1,40 +1,56 @@
 /**
- * Deterministic evaluation: turns signals into evidence gain, runtime
- * progress, dead-end detection and a policy verdict. Jev never participates
- * here — this module must produce a complete report on its own (POC-00 §7).
+ * Deterministic evaluation (POC-03.5 refactor): the three concepts are
+ * DISTINCT and never aliases (§2):
+ *
+ *   runtimeChange  — something observable changed (magnitude: NONE/SINGLE/MULTIPLE)
+ *   evidenceGain   — the latest attempt produced useful new diagnostic/runtime evidence
+ *   goalProgress   — evidence moved the app measurably toward the stated task objective
+ *                    (requires a ProgressContract; without one it stays UNKNOWN)
+ *
+ * HARD RULE: screenChanged=true or crashChanged=true never implies HIGH
+ * goalProgress. Policy ladder (§10): OBSERVE → VERIFY_FIRST → RETHINK →
+ * HUMAN_REVIEW (reserved).
  */
 
 import type { AttemptEvidence } from './types.js';
 import type { SeriesSignals } from './signals.js';
 import { pairSignals, seriesSignals } from './signals.js';
+import type { GoalProgressResult, ProgressContract } from './contract.js';
+import { evaluateGoalProgress } from './contract.js';
 
 export type Level = 'HIGH' | 'MEDIUM' | 'LOW';
 
-export type Policy = 'CONTINUE' | 'VERIFY_FIRST' | 'RETHINK' | 'HUMAN_REVIEW';
+export type RuntimeChangeLevel = 'NONE' | 'SINGLE' | 'MULTIPLE';
+
+export type Policy = 'OBSERVE' | 'VERIFY_FIRST' | 'RETHINK' | 'HUMAN_REVIEW';
 
 export interface GainComponents {
   testsImproved: boolean;
   crashChanged: boolean;
   screenChanged: boolean;
+  buildChanged: boolean;
 }
 
 export interface PairEvaluation {
+  runtimeChange: RuntimeChangeLevel;
+  runtimeChangeDetail: string[];
   evidenceGain: Level;
   gainComponents: GainComponents;
-  runtimeProgress: Level;
 }
 
 export interface Evaluation extends PairEvaluation {
+  goalProgress: GoalProgressResult;
   deadEndCandidate: boolean;
   policy: Policy;
   verdict: string;
   rationale: string[];
 }
 
-const LATEST_PAIR_DEFAULT: PairEvaluation = {
-  evidenceGain: 'LOW',
-  gainComponents: { testsImproved: false, crashChanged: false, screenChanged: false },
-  runtimeProgress: 'LOW',
+const EMPTY_GOAL: GoalProgressResult = {
+  level: 'UNKNOWN',
+  rationale: 'no attempt pair to evaluate',
+  matchedSuccessSignals: [],
+  matchedNoProgressSignals: [],
 };
 
 /** Evaluate the transition prev → curr (the "latest pair"). */
@@ -43,16 +59,26 @@ export function evaluatePair(prev: AttemptEvidence, curr: AttemptEvidence): Pair
   const testsImproved = pair.failedTestsDelta !== null && pair.failedTestsDelta < 0;
   const crashChanged = pair.crashChanged === true;
   const screenChanged = pair.screenChanged === true;
-  const changeCount = [testsImproved, crashChanged, screenChanged].filter(Boolean).length;
+  const buildChanged = pair.buildChanged === true;
+  const changeCount = [testsImproved, crashChanged, screenChanged, buildChanged].filter(Boolean).length;
 
+  const detail: string[] = [];
+  if (testsImproved) detail.push(`failing tests ${pair.failedTestsDelta}`);
+  if (crashChanged) detail.push('crash signature changed');
+  if (screenChanged) detail.push('screen changed');
+  if (buildChanged) detail.push('build status changed');
+
+  const runtimeChange: RuntimeChangeLevel =
+    changeCount >= 2 ? 'MULTIPLE' : changeCount === 1 ? 'SINGLE' : 'NONE';
+
+  // Evidence gain: how much NEW diagnostic information the pair produced.
   const evidenceGain: Level = changeCount >= 2 ? 'HIGH' : changeCount === 1 ? 'MEDIUM' : 'LOW';
-  const runtimeProgress: Level =
-    testsImproved && changeCount >= 2 ? 'HIGH' : testsImproved || changeCount >= 1 ? 'MEDIUM' : 'LOW';
 
   return {
+    runtimeChange,
+    runtimeChangeDetail: detail,
     evidenceGain,
-    gainComponents: { testsImproved, crashChanged, screenChanged },
-    runtimeProgress,
+    gainComponents: { testsImproved, crashChanged, screenChanged, buildChanged },
   };
 }
 
@@ -84,14 +110,41 @@ export interface ScenarioEvaluation {
   evaluation: Evaluation;
 }
 
-/** Full deterministic pipeline for one attempt series. */
-export function evaluateScenario(attempts: AttemptEvidence[]): ScenarioEvaluation {
+/** Full deterministic pipeline for one attempt series (contract optional). */
+export function evaluateScenario(attempts: AttemptEvidence[], contract?: ProgressContract | null): ScenarioEvaluation {
   const signals = seriesSignals(attempts);
 
   const last = attempts[attempts.length - 1];
   const prev = attempts[attempts.length - 2];
-  const pairEval: PairEvaluation =
-    last !== undefined && prev !== undefined ? evaluatePair(prev, last) : LATEST_PAIR_DEFAULT;
+  const hasPair = last !== undefined && prev !== undefined;
+  const pairEval: PairEvaluation = hasPair
+    ? evaluatePair(prev, last)
+    : {
+        runtimeChange: 'NONE',
+        runtimeChangeDetail: [],
+        evidenceGain: 'LOW',
+        gainComponents: { testsImproved: false, crashChanged: false, screenChanged: false, buildChanged: false },
+      };
+
+  const goalProgress: GoalProgressResult = hasPair
+    ? evaluateGoalProgress({
+        contract: contract ?? null,
+        prev: {
+          crashSignature: prev.runtime.crashSignature,
+          screenSignature: prev.runtime.screenSignature,
+          testsFailedCount: prev.tests.failedCount,
+          verificationPerformed: prev.verification.performed,
+        },
+        curr: {
+          crashSignature: last.runtime.crashSignature,
+          screenSignature: last.runtime.screenSignature,
+          testsFailedCount: last.tests.failedCount,
+          verificationPerformed: last.verification.performed,
+        },
+        failedTestsDelta: signals.pairs[signals.pairs.length - 1]?.failedTestsDelta ?? null,
+        runtimeChangeMagnitude: pairEval.runtimeChange,
+      })
+    : EMPTY_GOAL;
 
   const deadEndCandidate = detectDeadEnd(attempts, signals);
   const rationale: string[] = [];
@@ -109,26 +162,30 @@ export function evaluateScenario(attempts: AttemptEvidence[]): ScenarioEvaluatio
     policy = 'RETHINK';
     verdict = '⚠ Different code. Same app.';
     rationale.push(
-      `${attempts.length} different patches, but crash / screen / failed-test counts are identical across all of them`,
+      `${attempts.length} materially different patches, but crash / screen / failed-test counts are identical across all of them`,
     );
-  } else if (pairEval.runtimeProgress === 'HIGH') {
-    policy = 'CONTINUE';
-    verdict = '✓ Productive progress — runtime evidence improved.';
-    rationale.push('failed tests decreased together with changed crash or screen signature');
   } else if (last !== undefined && last.build.status === 'fail') {
     policy = 'HUMAN_REVIEW';
     verdict = '‼ Build is failing — escalate for human review.';
-    rationale.push('latest attempt does not build');
+    rationale.push('latest attempt does not build (HUMAN_REVIEW is reserved; mapping is provisional)');
   } else {
-    policy = 'CONTINUE';
-    verdict = '• No strong signal yet — continue.';
-    rationale.push('insufficient change in runtime evidence to classify further');
+    policy = 'OBSERVE';
+    verdict =
+      goalProgress.level === 'HIGH'
+        ? '✓ Productive progress — goal evidence improved.'
+        : '• No strong signal yet — observe.';
+    if (goalProgress.level === 'HIGH') {
+      rationale.push(`contract-linked success: ${goalProgress.rationale}`);
+    } else {
+      rationale.push('no VERIFY_FIRST/RETHINK condition met; continuing observation');
+    }
   }
 
   return {
     signals,
     evaluation: {
       ...pairEval,
+      goalProgress,
       deadEndCandidate,
       policy,
       verdict,

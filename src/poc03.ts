@@ -25,6 +25,8 @@ interface HookEvent {
   toolName: string;
   ok: boolean | null;
   fileHash: string | null;
+  changeFingerprint?: string | null;
+  fingerprintBasis?: 'content' | 'path' | null;
   verificationKind: string | null;
   testsFailedCount?: number | null;
 }
@@ -36,14 +38,18 @@ function toReplayEvent(event: HookEvent, epochMs: number): SanitizedReplayEvent 
   const offset = Number.isFinite(tsMs) ? tsMs - epochMs : null;
 
   if (IMPLEMENTATION_TOOLS.has(event.toolName)) {
+    // Novelty = content fingerprint when the hook could derive one (POC-03.5),
+    // path hash otherwise.
+    const novelty = event.changeFingerprint ?? event.fileHash;
     return {
       eventType: 'implementation',
       timestampOffset: offset,
       toolName: event.toolName,
       ok: event.ok,
       verificationKind: null,
-      changedFilesCount: event.fileHash !== null ? 1 : null,
-      changeSetHash: event.fileHash,
+      changedFilesCount: novelty !== null ? 1 : null,
+      changeSetHash: novelty,
+      fingerprintBasis: event.fingerprintBasis ?? (event.fileHash !== null ? 'path' : null),
       failureSignatureHash: null,
       testsFailedCount: null,
       durationMs: null,
@@ -63,6 +69,7 @@ function toReplayEvent(event: HookEvent, epochMs: number): SanitizedReplayEvent 
       verificationKind: event.verificationKind as SanitizedReplayEvent['verificationKind'],
       changedFilesCount: null,
       changeSetHash: null,
+            fingerprintBasis: null,
       failureSignatureHash: null,
       testsFailedCount: event.testsFailedCount ?? null,
       durationMs: null,
@@ -76,6 +83,7 @@ function toReplayEvent(event: HookEvent, epochMs: number): SanitizedReplayEvent 
     verificationKind: null,
     changedFilesCount: null,
     changeSetHash: null,
+            fingerprintBasis: null,
     failureSignatureHash: null,
     testsFailedCount: null,
     durationMs: null,

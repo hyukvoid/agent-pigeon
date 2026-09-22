@@ -25,8 +25,14 @@ export interface SanitizedReplayEvent {
   verificationKind: VerificationKind | null;
   /** Implementation events: number of distinct files touched by this call. */
   changedFilesCount: number | null;
-  /** sha256-8 of the sorted changed-path list for this call. */
+  /**
+   * Novelty identity for this change: sha256-8 of the NORMALIZED CHANGE
+   * CONTENT when available (POC-03.5), falling back to the path-list hash.
+   * Never the raw content.
+   */
   changeSetHash: string | null;
+  /** What the changeSetHash was derived from. */
+  fingerprintBasis: 'content' | 'path' | null;
   /** sha256-8 of the normalized failure text; present only when a verification failed. */
   failureSignatureHash: string | null;
   /** Extracted failed-test count; null when unknown. Numbers only — never text. */
