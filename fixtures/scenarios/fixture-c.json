@@ -1,0 +1,34 @@
+[
+  {
+    "attemptId": "c1",
+    "build": { "status": "pass" },
+    "tests": { "failedCount": null },
+    "runtime": { "crashSignature": null, "screenSignature": null },
+    "verification": { "performed": false },
+    "code": { "changedFilesCount": 2, "changeSetHash": "cs:3c8e51" }
+  },
+  {
+    "attemptId": "c2",
+    "build": { "status": "pass" },
+    "tests": { "failedCount": null },
+    "runtime": { "crashSignature": null, "screenSignature": null },
+    "verification": { "performed": false },
+    "code": { "changedFilesCount": 4, "changeSetHash": "cs:e02b77" }
+  },
+  {
+    "attemptId": "c3",
+    "build": { "status": "pass" },
+    "tests": { "failedCount": null },
+    "runtime": { "crashSignature": null, "screenSignature": null },
+    "verification": { "performed": false },
+    "code": { "changedFilesCount": 1, "changeSetHash": "cs:76fa18" }
+  },
+  {
+    "attemptId": "c4",
+    "build": { "status": "pass" },
+    "tests": { "failedCount": null },
+    "runtime": { "crashSignature": null, "screenSignature": null },
+    "verification": { "performed": false },
+    "code": { "changedFilesCount": 3, "changeSetHash": "cs:d4c9a5" }
+  }
+]
