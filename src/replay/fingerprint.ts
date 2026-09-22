@@ -1,24 +1,55 @@
 /**
- * changeFingerprint (POC-03.5 §1) — privacy-safe content novelty.
+ * changeFingerprint (hardened, POC-03.5.1).
  *
- * A path hash cannot distinguish Patch A from Patch B on the same file. The
- * fingerprint hashes the NORMALIZED change payload (edit old/new strings,
- * Write content, MultiEdit aggregate) locally and stores only a short
- * digest. Raw source/edit text is never persisted and never sent to Jev.
+ *   fingerprint = HMAC-SHA256(perInstallSecret, canonicalPayload)[0:32 hex]  (128 bits)
  *
- * Normalization (whitespace collapse) is for STABILITY, not secrecy: the
- * same semantic change re-applied hashes identically; materially different
- * edits hash differently. Hashing itself is what protects content.
+ * Why HMAC with a per-install secret: a bare digest lets anyone test
+ * candidate contents ("did the agent touch this exact snippet?") by
+ * re-hashing guesses. Keying with a locally-generated secret that never
+ * leaves the machine removes candidate matching for everyone except the
+ * install owner. The digest is 128 bits — collision/target resistance —
+ * but it is still a commitment to content: treat stored fingerprints as
+ * sensitive metadata, not as anonymous data.
+ *
+ * Canonicalization policy (serialization mechanics ONLY):
+ *  - stable JSON layout with explicit key order (v, op, parts…)
+ *  - line endings normalized (CRLF/CR → LF) so the same edit committed from
+ *    different tooling hashes identically — justified mechanics, not
+ *    semantics
+ *  - NO whitespace collapsing: indentation and spacing are part of the
+ *    change semantics
+ *
+ * The per-install secret never enters any event, fixture, or Jev payload.
  */
 
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
+import { loadOrCreateSecret } from './secret.js';
 
-export function normalizeChangePayload(text: string): string {
-  return text.replace(/\s+/gu, ' ').trim();
+const lf = (text: string): string => text.replace(/\r\n?/gu, '\n');
+
+function hmacFingerprint(secret: string, canonical: string): string {
+  return createHmac('sha256', secret).update(canonical, 'utf8').digest('hex').slice(0, 32);
 }
 
-/** sha256-8 over the normalized parts, joined with a NUL separator. */
-export function changeFingerprint(parts: string[]): string {
-  const payload = parts.map((p) => normalizeChangePayload(p)).join('\u0000');
-  return createHash('sha256').update(payload).digest('hex').slice(0, 8);
+export type ChangeOperation = 'edit' | 'write' | 'notebook' | 'multi-edit';
+
+/** Content fingerprint: HMAC-SHA256(128-bit) over the canonical change payload. */
+export function contentFingerprint(
+  secret: string,
+  op: ChangeOperation,
+  parts: string[],
+): string {
+  const canonical = JSON.stringify({ v: 2, op, parts: parts.map(lf) });
+  return hmacFingerprint(secret, canonical);
+}
+
+/** Fallback fingerprint over the sorted changed-path list (same HMAC keying). */
+export function pathFingerprint(secret: string, paths: string[]): string {
+  const canonical = JSON.stringify({ v: 2, op: 'paths', paths: [...paths].sort() });
+  return hmacFingerprint(secret, canonical);
+}
+
+/** Convenience: load-or-create the install secret and fingerprint content. */
+export function fingerprintChange(op: ChangeOperation, parts: string[]): string {
+  return contentFingerprint(loadOrCreateSecret(), op, parts);
 }

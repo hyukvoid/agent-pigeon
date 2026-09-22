@@ -13,8 +13,9 @@
 import { createHash } from 'node:crypto';
 import type { ReplayAttempt, SanitizedReplayEvent } from './types.js';
 
-function sha8(text: string): string {
-  return createHash('sha256').update(text).digest('hex').slice(0, 8);
+/** Window changeSetHash = sha256-128 of the sorted member fingerprints. */
+function hashOfFingerprints(sortedFingerprints: string[]): string {
+  return createHash('sha256').update(sortedFingerprints.join('\n'), 'utf8').digest('hex').slice(0, 32);
 }
 
 export interface AttemptWindow {
@@ -59,7 +60,7 @@ export function segmentWithWindows(events: SanitizedReplayEvent[]): Segmentation
     const lastBuild = [...open.verification].reverse().find((v) => v.verificationKind === 'build');
     const failedVerification = open.verification.find((v) => v.ok === false);
     const paths = [...open.changedFilePathHashes].sort();
-    const changeSetHash = paths.length > 0 ? sha8(paths.join('\n')) : null;
+    const changeSetHash = paths.length > 0 ? hashOfFingerprints(paths) : null;
 
     // A passing test run means zero failing tests, even when the runner did
     // not print a count (same inference as the POC-02 transcript parser).

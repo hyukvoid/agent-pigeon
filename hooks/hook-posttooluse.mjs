@@ -1,23 +1,28 @@
 #!/usr/bin/env node
 /**
- * Agent Pigeon — Claude Code PostToolUse hook (POC-03 hot path).
+ * Agent Pigeon — Claude Code PostToolUse hook (POC-03/04 hot path).
  *
  * Contract: read one hook JSON from stdin, append ONE sanitized JSONL event,
  * exit 0 immediately. Never blocks, never fails, never talks to the network,
  * never invokes Jev, never reads transcripts or git. All heavy work happens
- * in the offline worker (poc:03), not here.
+ * in the offline worker (poc:03 / governor processor), not here.
  *
  * Stored fields (normalized metadata only — spec §5):
  *   ts, sessionId (8 chars), toolName, ok (tool success if determinable),
- *   fileHash (sha256-8 of the edited file path — never the path itself),
- *   verificationKind (test|build|device|other for Bash commands — never the
- *   command text).
+ *   changeFingerprint (HMAC-SHA256-128 over the NORMALIZED CHANGE CONTENT —
+ *   never the content itself), fileHash (HMAC of the edited path),
+ *   fingerprintBasis (content|path), verificationKind (for Bash commands —
+ *   never the command text), testsFailedCount (a bare number).
+ *
+ * Fingerprints are keyed with a per-install secret (POC-03.5.1): digests
+ * cannot be candidate-matched without this machine's secret. The secret is
+ * generated locally, stored outside any repository, and never sent anywhere.
  */
 
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 
 const EVENTS_FILE =
   process.env.AGENT_PIGEON_EVENTS ?? join(homedir(), '.agent-pigeon', 'events.jsonl');
@@ -30,43 +35,62 @@ const DEVICE_PATTERN = /\b(adb(?:\.exe)?\s|agent-device\s|emulator\s|maestro\s)/
 const BUILD_PATTERN =
   /\b(gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|npm run build\b|go build\b|dotnet build\b|cargo build\b)/i;
 
-function classifyCommand(command) {
-  if (TEST_PATTERN.test(command)) return 'test';
-  if (DEVICE_PATTERN.test(command)) return 'device';
-  if (BUILD_PATTERN.test(command)) return 'build';
-  return 'other';
+// --- per-install secret (POC-03.5.1) --------------------------------------
+// Mirrors src/replay/secret.ts. Lives OUTSIDE any repository
+// (<AGENT_PIGEON_HOME | ~/.agent-pigeon>/secret.key, mode 0600). Never
+// committed, never included in events or Jev payloads.
+
+function pigeonHome() {
+  return process.env.AGENT_PIGEON_HOME ?? join(homedir(), '.agent-pigeon');
 }
 
-// --- changeFingerprint (POC-03.5 §1) -------------------------------------
-// Mirrors src/replay/fingerprint.ts (contract-tested). Hashes the NORMALIZED
-// change CONTENT so "same file, different patch" is novel; only the 8-hex
-// digest is stored — raw source/edit text never persists and never reaches
-// Jev or any network.
-
-function sha8(text) {
-  return createHash('sha256').update(text).digest('hex').slice(0, 8);
+function loadOrCreateSecret() {
+  const dir = pigeonHome();
+  mkdirSync(dir, { recursive: true });
+  const secretPath = join(dir, 'secret.key');
+  if (existsSync(secretPath)) {
+    const existing = readFileSync(secretPath, 'utf8').trim();
+    if (existing.length >= 32) return existing;
+  }
+  const secret = randomBytes(32).toString('hex');
+  writeFileSync(secretPath, `${secret}\n`, { encoding: 'utf8', mode: 0o600 });
+  return secret;
 }
 
-function normalizeChangePayload(text) {
-  return String(text).replace(/\s+/gu, ' ').trim();
+function hmacFingerprint(secret, canonical) {
+  return createHmac('sha256', secret).update(canonical, 'utf8').digest('hex').slice(0, 32);
 }
 
-function fingerprintParts(parts) {
-  return sha8(parts.map((p) => normalizeChangePayload(p)).join('\u0000'));
+const lf = (text) => String(text).replace(/\r\n?/gu, '\n');
+
+// Canonicalization: serialization mechanics only (stable JSON key order,
+// line endings). NO whitespace collapsing — indentation is semantics.
+function contentFingerprint(secret, op, parts) {
+  return hmacFingerprint(secret, JSON.stringify({ v: 2, op, parts: parts.map(lf) }));
+}
+function pathFingerprint(secret, paths) {
+  return hmacFingerprint(secret, JSON.stringify({ v: 2, op: 'paths', paths: [...paths].sort() }));
 }
 
-function changeIdentity(toolName, input) {
-  const pathHash =
-    typeof input?.file_path === 'string' && input.file_path.length > 0
-      ? sha8(input.file_path)
-      : null;
+function changeIdentity(toolName, input, secret) {
+  const paths = [];
+  if (typeof input?.file_path === 'string') paths.push(input.file_path);
+  else if (Array.isArray(input?.file_path)) {
+    paths.push(...input.file_path.filter((p) => typeof p === 'string'));
+  }
+  const unique = [...new Set(paths)];
+  const pathHash = unique.length > 0 ? pathFingerprint(secret, unique) : null;
 
+  let op = null;
   let parts = null;
   if (toolName === 'Edit' && typeof input?.old_string === 'string' && typeof input?.new_string === 'string') {
+    op = 'edit';
     parts = [input.old_string, input.new_string];
   } else if (toolName === 'Write' && typeof input?.content === 'string') {
+    op = 'write';
     parts = [input.content];
   } else if (toolName === 'NotebookEdit' && typeof input?.new_source === 'string') {
+    op = 'notebook';
     parts = [input.new_source];
   } else if (toolName === 'MultiEdit' && Array.isArray(input?.edits) && input.edits.length > 0) {
     parts = input.edits.flatMap((e) =>
@@ -75,12 +99,20 @@ function changeIdentity(toolName, input) {
         : [],
     );
     if (parts.length === 0) parts = null;
+    else op = 'multi-edit';
   }
 
-  if (parts !== null) {
-    return { changeFingerprint: fingerprintParts(parts), fingerprintBasis: 'content', fileHash: pathHash };
+  if (op !== null && parts !== null) {
+    return { changeFingerprint: contentFingerprint(secret, op, parts), fingerprintBasis: 'content', fileHash: pathHash };
   }
   return { changeFingerprint: pathHash, fingerprintBasis: pathHash !== null ? 'path' : null, fileHash: pathHash };
+}
+
+function classifyCommand(command) {
+  if (TEST_PATTERN.test(command)) return 'test';
+  if (DEVICE_PATTERN.test(command)) return 'device';
+  if (BUILD_PATTERN.test(command)) return 'build';
+  return 'other';
 }
 
 let raw = '';
@@ -95,7 +127,7 @@ process.stdin.on('end', () => {
 
     let change = { changeFingerprint: null, fingerprintBasis: null, fileHash: null };
     if (IMPLEMENTATION_TOOLS.has(toolName)) {
-      change = changeIdentity(toolName, input.tool_input ?? {});
+      change = changeIdentity(toolName, input.tool_input ?? {}, loadOrCreateSecret());
     }
 
     let verificationKind = null;

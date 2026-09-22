@@ -8,7 +8,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import { changeFingerprint } from './fingerprint.js';
+import { contentFingerprint, pathFingerprint } from './fingerprint.js';
+import { loadOrCreateSecret } from './secret.js';
 import type { SanitizedReplayEvent, VerificationKind } from './types.js';
 import { IMPLEMENTATION_TOOLS } from './types.js';
 
@@ -120,12 +121,16 @@ interface ImplementationInput {
 }
 
 /**
- * Content-based changeFingerprint for an implementation call (POC-03.5 §1).
- * Prefers the normalized edit/content payload so "same file, different patch"
- * hashes differently; falls back to the path-list hash when no content is
- * available. The content itself is hashed and immediately discarded.
+ * Content-based changeFingerprint (HMAC-SHA256, 128-bit; POC-03.5.1).
+ * Prefers the canonical change payload so "same file, different patch"
+ * hashes differently; falls back to the HMAC path-list hash when no content
+ * is available. Content is hashed and immediately discarded — the secret
+ * never leaves the machine.
  */
-function changeIdentityFromInput(input: ImplementationInput): {
+function changeIdentityFromInput(
+  input: ImplementationInput,
+  secret: string,
+): {
   count: number | null;
   hash: string | null;
   basis: 'content' | 'path' | null;
@@ -136,26 +141,37 @@ function changeIdentityFromInput(input: ImplementationInput): {
     paths.push(...input.file_path.filter((p): p is string => typeof p === 'string'));
   }
   const unique = [...new Set(paths)];
-  const pathHash = unique.length > 0 ? sha8([...unique].sort().join('\n')) : null;
+  const pathHash = unique.length > 0 ? pathFingerprint(secret, unique) : null;
 
-  let contentParts: string[] | null = null;
+  let op: 'edit' | 'write' | 'notebook' | 'multi-edit' | null = null;
+  let parts: string[] | null = null;
   if (typeof input.old_string === 'string' && typeof input.new_string === 'string') {
-    contentParts = [input.old_string, input.new_string];
+    op = 'edit';
+    parts = [input.old_string, input.new_string];
   } else if (typeof input.content === 'string') {
-    contentParts = [input.content];
+    op = 'write';
+    parts = [input.content];
   } else if (typeof input.new_source === 'string') {
-    contentParts = [input.new_source];
+    op = 'notebook';
+    parts = [input.new_source];
   } else if (Array.isArray(input.edits) && input.edits.length > 0) {
-    contentParts = input.edits.flatMap((e) =>
+    const pairs = input.edits.flatMap((e) =>
       typeof e.old_string === 'string' && typeof e.new_string === 'string'
         ? [e.old_string, e.new_string]
         : [],
     );
-    if (contentParts.length === 0) contentParts = null;
+    if (pairs.length > 0) {
+      op = 'multi-edit';
+      parts = pairs;
+    }
   }
 
-  if (contentParts !== null) {
-    return { count: unique.length > 0 ? unique.length : null, hash: changeFingerprint(contentParts), basis: 'content' };
+  if (op !== null && parts !== null) {
+    return {
+      count: unique.length > 0 ? unique.length : null,
+      hash: contentFingerprint(secret, op, parts),
+      basis: 'content',
+    };
   }
   return { count: unique.length > 0 ? unique.length : null, hash: pathHash, basis: pathHash !== null ? 'path' : null };
 }
@@ -182,6 +198,8 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
   const events: SanitizedReplayEvent[] = [];
 
   let epochMs: number | null = null;
+  // Per-install HMAC key for change/path fingerprints (loaded once per parse).
+  const secret = loadOrCreateSecret();
   /** tool_use_id -> in-flight call (toolName + kind), for pairing results. */
   const pending = new Map<
     string,
@@ -224,7 +242,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
       if (obj.type === 'assistant' && block.type === 'tool_use' && typeof block.name === 'string') {
         const toolName = block.name;
         if (IMPLEMENTATION_TOOLS.includes(toolName)) {
-          const change = changeIdentityFromInput((block.input ?? {}) as ImplementationInput);
+          const change = changeIdentityFromInput((block.input ?? {}) as ImplementationInput, secret);
           const id = (block as unknown as { id?: string }).id ?? '';
           pending.set(id, { toolName, verificationKind: null, change });
           events.push({
