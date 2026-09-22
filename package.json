@@ -2,7 +2,7 @@
   "name": "agent-pigeon",
   "version": "0.1.0",
   "private": true,
-  "description": "Proof-of-progress for mobile coding agents.",
+  "description": "Proof-of-progress for coding agents. Detects implementation changes made without verification evidence.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -12,17 +12,22 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
-    "poc:00": "npm run build && node dist/src/cli.js",
-    "poc:01": "npm run build && node dist/src/poc01.js",
-    "poc:02": "npm run build && node dist/src/poc02.js",
-    "poc:03": "npm run build && node dist/src/poc03.js",
-    "poc:035": "npm run build && node dist/src/poc035.js",
+    "demo": "npm run build && node dist/src/poc00-demo.js",
     "governor:process": "npm run build && node dist/src/governor-process.js",
-    "poc:04b": "npm run build && node --max-old-space-size=4096 dist/src/poc04b.js"
+    "research:corpus": "npm run build && node --max-old-space-size=4096 dist/src/poc04b.js"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
     "agent-device": "^0.21.8",
     "typescript": "5.9.3"
-  }
+  },
+  "bin": {
+    "agent-pigeon": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src",
+    "hooks",
+    "README.md",
+    "LICENSE"
+  ]
 }
