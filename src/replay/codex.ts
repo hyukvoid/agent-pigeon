@@ -59,9 +59,47 @@ interface CodexLine {
 
 const lf = (text: string): string => text.replace(/\r\n?/gu, '\n');
 
-/** Mobile/Android context signals (spec §5) — evaluated in memory only. */
+/** Mobile/Android context signals (POC-04B §5) — evaluated in memory only. */
 const MOBILE_PATTERN =
   /\b(adb(?:\.exe)?\s|gradlew?(?:\.bat)?\b|emulator\b|agent-device\s|logcat\b|\.apk\b|aapt\d?\s|android\b|com\.android\.\w+)/i;
+
+/**
+ * Inner tool calls inside exec-JS programs (POC-04C discovery): the JS drives
+ * tools via `await tools.apply_patch(...)`, `await tools.exec_command(...)`,
+ * `await tools.shell_command(...)`. We conservatively extract:
+ *  - embedded patch bodies (`*** Begin Patch … *** End Patch`) → implementation
+ *  - string arguments of inner exec_command/shell_command calls whose text
+ *    classifies as build/test/device → verification
+ * Everything else in the program is ignored.
+ */
+
+function extractEmbeddedPatches(program: string): { bodies: string[]; paths: Set<string> } {
+  const bodies: string[] = [];
+  const paths = new Set<string>();
+  for (const match of program.matchAll(/\*\*\* Begin Patch[\s\S]*?\*\*\* End Patch/gu)) {
+    const patch = match[0] ?? '';
+    bodies.push(lf(patch));
+    for (const fileMark of patch.matchAll(/^\s*\*{3}\s*(?:Update|Add|Delete) File:\s*(.+?)\s*\\n?$/gmu)) {
+      const path = (fileMark[1] ?? '').replace(/\\n$/u, '').trim();
+      if (path.length > 0) paths.add(path);
+    }
+  }
+  return { bodies, paths };
+}
+
+function extractInnerVerificationCommand(program: string): { kind: VerificationKind; command: string } | null {
+  const callRe = /tools\.(?:exec_command|shell_command)\(/gu;
+  let match: RegExpExecArray | null;
+  while ((match = callRe.exec(program)) !== null) {
+    const window = program.slice(match.index, match.index + 400);
+    const strings = [...window.matchAll(/"((?:\\.|[^"\\]){0,200}?)"/gu)].map((x) => (x[1] ?? '').replace(/\\n/gu, ' ').trim());
+    const joined = strings.filter((s) => s.length > 0).join(' ');
+    if (joined.length === 0) continue;
+    const kind = classifyVerificationCommand(joined);
+    if (kind !== null) return { kind, command: joined };
+  }
+  return null;
+}
 
 /** Codex `apply_patch` unified format: extract file ops without storing them. */
 function parseApplyPatch(patch: string): {
@@ -199,36 +237,99 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
           durationMs: null,
         });
       } else if (p.name === 'exec' || p.name === 'shell_command') {
-        let command = '';
-        if (typeof p.input === 'string') command = p.input;
-        else if (typeof p.arguments === 'string') {
+        // Outer `exec` input is a JS PROGRAM that drives inner tools
+        // (POC-04C). Outer `shell_command` arguments are real shell commands.
+        let outerShellCommand = '';
+        if (p.name === 'shell_command' && typeof p.arguments === 'string') {
           try {
             const args = JSON.parse(p.arguments) as { command?: unknown };
-            command = Array.isArray(args.command)
+            outerShellCommand = Array.isArray(args.command)
               ? args.command.filter((c): c is string => typeof c === 'string').join(' ')
               : typeof args.command === 'string'
                 ? args.command
                 : '';
           } catch {
-            command = '';
+            outerShellCommand = '';
+          }
+        }
+        const program = p.name === 'exec' && typeof p.input === 'string' ? p.input : null;
+
+        // (a) Embedded patch bodies → implementation (content fingerprint).
+        const patches = program !== null ? extractEmbeddedPatches(program) : { bodies: [], paths: new Set<string>() };
+        let verificationEventIndex: number | null = null;
+
+        if (patches.bodies.length > 0) {
+          const allPaths = [...patches.paths];
+          const pathHash = allPaths.length > 0 ? pathFingerprint(secret(), allPaths) : null;
+          const basis = 'content' as const;
+          pending.set(callId, { isVerification: false, verificationKind: null, eventIndex: events.length });
+          pushEvent({
+            eventType: 'implementation',
+            timestampOffset: offset,
+            toolName: 'apply_patch',
+            ok: null,
+            verificationKind: null,
+            changedFilesCount: allPaths.length,
+            changeSetHash: contentFingerprint(secret(), 'patch', patches.bodies),
+            fingerprintBasis: pathHash !== null || allPaths.length > 0 ? basis : null,
+            failureSignatureHash: null,
+            testsFailedCount: null,
+            durationMs: null,
+          });
+        }
+
+        // (b) Verification: outer shell command, or inner tool-call strings.
+        let verificationCommand: string | null = null;
+        if (outerShellCommand.length > 0) {
+          if (MOBILE_PATTERN.test(outerShellCommand)) mobileSignal = true;
+          if (classifyVerificationCommand(outerShellCommand) !== null) verificationCommand = outerShellCommand;
+        }
+        if (program !== null) {
+          const inner = extractInnerVerificationCommand(program);
+          if (inner !== null) {
+            if (MOBILE_PATTERN.test(inner.command)) mobileSignal = true;
+            verificationCommand = verificationCommand ?? inner.command;
           }
         }
         const verificationKind: VerificationKind | null =
-          command.length > 0 ? classifyVerificationCommand(command) : null;
-        if (MOBILE_PATTERN.test(command)) mobileSignal = true;
-        pending.set(callId, { isVerification: verificationKind !== null, verificationKind, eventIndex: events.length });
-        pushEvent({
-          eventType: verificationKind !== null ? 'verification' : 'other',
-          timestampOffset: offset,
-          toolName: p.name,
-          ok: null,
-          verificationKind,
-          changedFilesCount: null,
-          changeSetHash: null,
-          failureSignatureHash: null,
-          testsFailedCount: null,
-          durationMs: null,
-        });
+          verificationCommand !== null ? classifyVerificationCommand(verificationCommand) : null;
+
+        if (verificationKind !== null) {
+          verificationEventIndex = events.length;
+          pending.set(callId, { isVerification: true, verificationKind, eventIndex: verificationEventIndex });
+          pushEvent({
+            eventType: 'verification',
+            timestampOffset: offset,
+            toolName: p.name,
+            ok: null,
+            verificationKind,
+            changedFilesCount: null,
+            changeSetHash: null,
+            fingerprintBasis: null,
+            failureSignatureHash: null,
+            testsFailedCount: null,
+            durationMs: null,
+          });
+        } else if (patches.bodies.length === 0) {
+          pending.set(callId, { isVerification: false, verificationKind: null, eventIndex: events.length });
+          pushEvent({
+            eventType: 'other',
+            timestampOffset: offset,
+            toolName: p.name,
+            ok: null,
+            verificationKind: null,
+            changedFilesCount: null,
+            changeSetHash: null,
+            fingerprintBasis: null,
+            failureSignatureHash: null,
+            testsFailedCount: null,
+            durationMs: null,
+          });
+        } else {
+          // implementation-only program: pair its output to the implementation
+          // event index so nothing breaks, but outputs never set ok on it
+          pending.set(callId, { isVerification: false, verificationKind: null, eventIndex: events.length - 1 });
+        }
       }
       continue;
     }
@@ -241,6 +342,18 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
       if (event === undefined || event.ok !== null) continue;
 
       const outputText = outputArrayText(p.output);
+
+      // Sandbox launch failure: the command NEVER RAN. This is infrastructure
+      // noise, not verification evidence — downgrade to 'other' so it neither
+      // masks verification debt nor fabricates fail→pass progress (POC-04C).
+      if (/orchestrator_helper_launch_failed|windows sandbox:[^\n]*launch/i.test(outputText)) {
+        if (event.eventType === 'verification') {
+          event.eventType = 'other';
+          event.verificationKind = null;
+        }
+        continue;
+      }
+
       if (event.eventType === 'verification' && inFlight.verificationKind !== null) {
         const exitCode = extractExitCode(outputText);
         if (exitCode !== null) event.ok = exitCode === 0;

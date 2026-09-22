@@ -89,8 +89,12 @@ export function extractFailedCount(text: string): number | null {
 
 /**
  * Normalize error text so the same failure hashes the same across attempts:
- * digits, hex blobs and paths are masked before hashing. The result is a
- * short identity hash — the text itself is discarded.
+ * digits, hex blobs and paths are masked, then up to THREE content lines are
+ * hashed (POC-04C hardening). Harness wrapper lines ("Script failed",
+ * "Command failed", bare exit-code statements) are discarded BEFORE hashing —
+ * hashing them caused every failed command in every project to share one
+ * signature (a real false-positive source found by POC-04C auditing).
+ * The text itself is discarded; only the digest survives.
  */
 export function failureSignature(text: string): string {
   const normalized = text
@@ -98,11 +102,22 @@ export function failureSignature(text: string): string {
     .replace(/(?:\/(?:home|Users|root|tmp|var|mnt)\/\S+)/g, '<PATH>')
     .replace(/\b[0-9a-f]{8,}\b/gi, '<HEX>')
     .replace(/\b\d+(?:\.\d+)?\b/g, '<N>');
-  const firstMeaningful = normalized
+
+  const GENERIC_LINE =
+    /^(?:(?:script|command|shell|exec(?:ution)?)\s+(?:failed|completed|error)?\s*[:]?|wall time:? <N>(?: seconds)?|output:?|exit code[:\s]*<N>|process exited(?: with code <N>)?|failed|error|<N>)\s*$/i;
+
+  const contentLines = normalized
     .split(/\r?\n/u)
     .map((line) => line.trim())
-    .filter((line) => line.length > 3)[0];
-  return sha8(firstMeaningful ?? normalized);
+    .filter((line) => line.length > 3 && !GENERIC_LINE.test(line));
+
+  if (contentLines.length === 0) {
+    // nothing content-bearing: fall back to a fixed "opaque failure" identity
+    return sha8('<opaque-failure>');
+  }
+  // Error summaries live at the END of build/test output — hash the LAST
+  // three content lines. (First lines are usually harness wrappers.)
+  return sha8(contentLines.slice(-3).join('\n'));
 }
 
 interface ToolResultContent {

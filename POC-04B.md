@@ -1,5 +1,7 @@
 # POC-04B — Real Corpus Gate — Findings
 
+> **⚠ CORRECTED BY POC-04C**: the "1 confirmed dead-end (MEDIUM)" below was later shown to be a **FALSE POSITIVE** caused by failure-signature coarseness (the signature hashed harness wrapper lines — "Script failed / Wall time N seconds / Output:" — which are identical for every failed command in every project). After the signature was rebuilt (wrapper-filter + last-3-content-lines, POC-04C), dead-end candidates in this corpus dropped to **NOT OBSERVED**, and the debt/productive findings were re-validated. See [POC-04C.md](POC-04C.md). The debt findings below remain valid.
+
 - Date: 2026-09-22
 - Branch: `poc/04b-real-corpus-gate` (from POC-04A.1 final commit `05a8973`)
 - Sources (READ-ONLY): `~/.codex/sessions` (340 rollout files, 1.2 GB, 178,945 lines) + `~/.claude/projects` (10 files)
