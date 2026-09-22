@@ -9,6 +9,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -21,6 +22,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -33,6 +35,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -45,6 +48,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -57,6 +61,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -69,6 +74,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -81,6 +87,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -93,6 +100,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -105,6 +113,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -117,6 +126,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -129,6 +139,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -141,6 +152,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -153,6 +165,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -165,6 +178,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -176,7 +190,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "f22d399c",
+      "changeSetHash": "929a1e49",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -188,7 +203,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "f22d399c",
+      "changeSetHash": "778e7a40",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -200,7 +216,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "d34ed91f",
+      "changeSetHash": "0270fc33",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -212,7 +229,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "bc785b53",
+      "changeSetHash": "e4a11298",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -224,7 +242,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "bc785b53",
+      "changeSetHash": "974dd596",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -236,7 +255,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "bc785b53",
+      "changeSetHash": "8fb4f326",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -248,7 +268,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "bc785b53",
+      "changeSetHash": "850155a2",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -260,7 +281,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "bc785b53",
+      "changeSetHash": "be489b6c",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -273,6 +295,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -285,6 +308,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -297,6 +321,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -309,6 +334,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -320,7 +346,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "bc785b53",
+      "changeSetHash": "ebef4e52",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -332,7 +359,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "bc785b53",
+      "changeSetHash": "39e5a0b8",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -344,7 +372,8 @@
       "ok": true,
       "verificationKind": null,
       "changedFilesCount": 1,
-      "changeSetHash": "1825d0ad",
+      "changeSetHash": "788972e6",
+      "fingerprintBasis": "content",
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -357,6 +386,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -369,6 +399,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -381,6 +412,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -393,6 +425,7 @@
       "verificationKind": null,
       "changedFilesCount": null,
       "changeSetHash": null,
+      "fingerprintBasis": null,
       "failureSignatureHash": null,
       "testsFailedCount": null,
       "durationMs": null
@@ -417,8 +450,8 @@
           "performed": false
         },
         "code": {
-          "changedFilesCount": 4,
-          "changeSetHash": "f33a3b96"
+          "changedFilesCount": 11,
+          "changeSetHash": "e041cce0"
         }
       },
       "failureSignatureHash": null,

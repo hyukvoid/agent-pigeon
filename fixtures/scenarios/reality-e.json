@@ -1,0 +1,29 @@
+{
+  "contract": {
+    "task": "Fix crash after Sign In",
+    "crashMustDisappear": true,
+    "targetScreenSignature": "Authenticated",
+    "baselineScreenSignature": "Login",
+    "testsMustDecrease": true,
+    "usefulEvidenceSignals": ["failure moves deeper", "crash signature changes"],
+    "noProgressSignals": ["same crash", "same screen", "same failed tests"]
+  },
+  "attempts": [
+    {
+      "attemptId": "re1",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": 8 },
+      "runtime": { "crashSignature": "NullPointerException:LoginViewModel#onSubmit", "screenSignature": "Login" },
+      "verification": { "performed": true },
+      "code": { "changedFilesCount": 2, "changeSetHash": "fp:9e01ca" }
+    },
+    {
+      "attemptId": "re2",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": 8 },
+      "runtime": { "crashSignature": "FatalErrorException:AppLauncher#bootstrap", "screenSignature": "FatalError" },
+      "verification": { "performed": true },
+      "code": { "changedFilesCount": 2, "changeSetHash": "fp:0db2fe" }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "contract": {
+    "task": "Fix crash after Sign In",
+    "crashMustDisappear": true,
+    "baselineScreenSignature": "Login",
+    "testsMustDecrease": true,
+    "usefulEvidenceSignals": ["failure moves deeper", "crash signature changes"],
+    "noProgressSignals": ["same crash", "same screen", "same failed tests"]
+  },
+  "attempts": [
+    {
+      "attemptId": "rc1",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": 8 },
+      "runtime": { "crashSignature": "NullPointerException:LoginViewModel#onSubmit", "screenSignature": "Login" },
+      "verification": { "performed": true },
+      "code": { "changedFilesCount": 2, "changeSetHash": "fp:aa01bb" }
+    },
+    {
+      "attemptId": "rc2",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": 8 },
+      "runtime": { "crashSignature": "NullPointerException:LoginViewModel#onSubmit", "screenSignature": "Login" },
+      "verification": { "performed": true },
+      "code": { "changedFilesCount": 3, "changeSetHash": "fp:bb22cc" }
+    },
+    {
+      "attemptId": "rc3",
+      "build": { "status": "pass" },
+      "tests": { "failedCount": 8 },
+      "runtime": { "crashSignature": "NullPointerException:LoginViewModel#onSubmit", "screenSignature": "Login" },
+      "verification": { "performed": true },
+      "code": { "changedFilesCount": 1, "changeSetHash": "fp:cc33dd" }
+    }
+  ]
+}
