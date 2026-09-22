@@ -1,0 +1,10 @@
+Page: com.android.settings
+App: com.android.settings
+Snapshot: 15 visible nodes (35 total)
+Collapsed 20 Android helper nodes from the agent-facing text snapshot; use --raw or --json for the full hierarchy.
+@e1 [scroll-area] "com.android.settings:id/settings_homepage_container" [scrollable]
+@e2 [group] "설정 검색"
+@e4 [scroll-area] "저장용량, 배경화면 및 스타일, 색상, 테마 아이콘, 앱 그리드, 디스플레이 및 터치, 어두운 테마, 글꼴 크기, 터치, 모드, 방해 금지 모드, 취침, 운전, 소리 및 진동, 볼륨 및 햅틱, 알림, 알림 기록, 대화, 앱, 어시스턴트, 최근 앱, 기본 앱, 연결된 기기, 블루투스, 페어링, 네트워크 및 인터넷, 모바일, Wi-Fi, 핫스팟, Google, 서비스 및 환경설정" [scrollable]
+  [content below scroll-area hidden]
+@e5 [group]
+@e6 [list]

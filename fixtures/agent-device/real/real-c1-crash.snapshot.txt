@@ -1,0 +1,6 @@
+Page: com.android.settings
+App: com.android.settings
+Snapshot: 2 nodes
+A system surface (notification shade, quick settings, or another system overlay) covers the app, so this snapshot shows that surface. Interact with it or dismiss it (press back or swipe up) to reach app content.
+@e1 [button] "앱 정보"
+@e2 [button] "앱 닫기"
