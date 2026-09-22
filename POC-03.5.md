@@ -29,11 +29,11 @@ Implemented twice on purpose: `src/replay/fingerprint.ts` (transcript parser) an
 
 **Privacy guarantees (hard, test-enforced):**
 - Raw edit/source content is hashed in memory and immediately discarded — never written to events, fixtures, or Jev payloads.
-- The digest is one-way 8-hex; reconstruction is infeasible.
-- Test D writes a secret-bearing edit through the real hook and asserts the stored event contains none of the raw strings, only the 8-hex digest and `"fingerprintBasis":"content"`.
+- ~~The digest is one-way 8-hex; reconstruction is infeasible.~~ **CORRECTED in POC-03.5.1**: a 32-bit digest does not protect against reconstruction by candidate matching (guess content → compare digest). Fingerprints are now `HMAC-SHA256(perInstallSecret, canonicalPayload)`, stored as 128-bit / 32 hex — candidate matching requires this machine's secret. See [POC-04A.md](POC-04A.md), Part A.
+- Test D writes a secret-bearing edit through the real hook and asserts the stored event contains none of the raw strings, only the digest and `"fingerprintBasis":"content"`.
 - The Jev payload builder never receives change content (unchanged from POC-00 — it only ever sees counts/booleans/signature labels).
 
-Fingerprint tests: A) same file + different edit → different ✓ B) same change re-applied (whitespace-run variants) → same ✓ C) different file + different edit → different ✓ D) no raw source in storage ✓. Documented limit: whitespace normalization collapses runs but does not equate `a + b` with `a+b` — formatting-insensitive, not AST-level.
+Fingerprint tests: A) same file + different edit → different ✓ B) same change re-applied (whitespace-run variants) → same ✓ C) different file + different edit → different ✓ D) no raw source in storage ✓. Documented limit: whitespace normalization collapses runs but does not equate `a + b` with `a+b` — formatting-insensitive, not AST-level. *(POC-03.5.1 supersedes the whitespace-run part: whitespace collapsing was REMOVED — indentation-sensitive changes now hash differently; only line-ending normalization remains. See POC-04A.md.)*
 
 ## 3. Three concepts (§2) — definitions as implemented
 
