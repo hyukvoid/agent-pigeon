@@ -1,0 +1,134 @@
+{
+  "productive": [],
+  "debt": [
+    {
+      "source": "codex",
+      "sessionId8": "019e6e63",
+      "kind": "verification-debt",
+      "attemptRange": [
+        1,
+        1
+      ],
+      "detail": "62 implementation calls were made without collecting any verification evidence",
+      "confidence": "HIGH",
+      "attemptCount": 1,
+      "implementationCalls": 62,
+      "verificationRuns": 0,
+      "okSequence": [
+        null
+      ],
+      "failedCountsSequence": [
+        null
+      ],
+      "distinctFingerprints": 1,
+      "failureSignatureStable": true,
+      "mobile": false,
+      "tokensInWindow": null,
+      "manualVerdict": "UNAUDITED"
+    },
+    {
+      "source": "codex",
+      "sessionId8": "019f324c",
+      "kind": "verification-debt",
+      "attemptRange": [
+        1,
+        1
+      ],
+      "detail": "23 implementation calls were made without collecting any verification evidence",
+      "confidence": "HIGH",
+      "attemptCount": 1,
+      "implementationCalls": 23,
+      "verificationRuns": 0,
+      "okSequence": [
+        null
+      ],
+      "failedCountsSequence": [
+        null
+      ],
+      "distinctFingerprints": 1,
+      "failureSignatureStable": true,
+      "mobile": false,
+      "tokensInWindow": null,
+      "manualVerdict": "UNAUDITED"
+    },
+    {
+      "source": "codex",
+      "sessionId8": "019f99b7",
+      "kind": "verification-debt",
+      "attemptRange": [
+        2,
+        2
+      ],
+      "detail": "28 implementation calls were made without collecting any verification evidence",
+      "confidence": "HIGH",
+      "attemptCount": 2,
+      "implementationCalls": 28,
+      "verificationRuns": 0,
+      "okSequence": [
+        null
+      ],
+      "failedCountsSequence": [
+        null
+      ],
+      "distinctFingerprints": 1,
+      "failureSignatureStable": true,
+      "mobile": false,
+      "tokensInWindow": null,
+      "manualVerdict": "UNAUDITED"
+    },
+    {
+      "source": "claude",
+      "sessionId8": "415efbff",
+      "kind": "verification-debt",
+      "attemptRange": [
+        1,
+        1
+      ],
+      "detail": "11 implementation calls were made without collecting any verification evidence",
+      "confidence": "HIGH",
+      "attemptCount": 1,
+      "implementationCalls": 11,
+      "verificationRuns": 0,
+      "okSequence": [
+        null
+      ],
+      "failedCountsSequence": [
+        null
+      ],
+      "distinctFingerprints": 1,
+      "failureSignatureStable": true,
+      "mobile": false,
+      "tokensInWindow": null,
+      "manualVerdict": "UNAUDITED"
+    }
+  ],
+  "deadEnd": [
+    {
+      "source": "codex",
+      "sessionId8": "019e835d",
+      "kind": "dead-end",
+      "attemptRange": [
+        1,
+        2
+      ],
+      "detail": "2 different patches, same failure signature 7650e978",
+      "confidence": "MEDIUM",
+      "attemptCount": 3,
+      "implementationCalls": 79,
+      "verificationRuns": 2,
+      "okSequence": [
+        false,
+        true
+      ],
+      "failedCountsSequence": [
+        null,
+        null
+      ],
+      "distinctFingerprints": 2,
+      "failureSignatureStable": true,
+      "mobile": false,
+      "tokensInWindow": null,
+      "manualVerdict": "UNAUDITED"
+    }
+  ]
+}
