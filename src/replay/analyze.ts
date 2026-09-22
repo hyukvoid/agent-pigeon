@@ -79,11 +79,17 @@ export function analyzeAttempts(attempts: ReplayAttempt[]): ReplayAnalysis {
   // --- Dead-end exploration (failure-signature identity) -------------------
   // Consecutive attempts sharing the SAME failure signature while the code
   // kept changing. Runs are split whenever the signature changes.
-  const deadEndRuns: number[][] = [];
+  interface DeadEndRun {
+    indices: number[];
+    hash: string;
+  }
+  const deadEndRuns: DeadEndRun[] = [];
   let currentRun: number[] = [];
   let currentHash: string | null = null;
   const closeRun = (): void => {
-    if (currentRun.length >= 2) deadEndRuns.push(currentRun);
+    if (currentRun.length >= 2 && currentHash !== null) {
+      deadEndRuns.push({ indices: currentRun, hash: currentHash });
+    }
     currentRun = [];
   };
   attempts.forEach((attempt, index) => {
@@ -104,20 +110,20 @@ export function analyzeAttempts(attempts: ReplayAttempt[]): ReplayAnalysis {
 
   for (const run of deadEndRuns) {
     let allNovel = true;
-    for (let i = 1; i < run.length; i++) {
-      const prev = attempts[(run[i - 1] ?? 0)];
-      const curr = attempts[(run[i] ?? 0)];
+    for (let i = 1; i < run.indices.length; i++) {
+      const prev = attempts[(run.indices[i - 1] ?? 0)];
+      const curr = attempts[(run.indices[i] ?? 0)];
       if (prev === undefined || curr === undefined) continue;
       if (prev.evidence.code.changeSetHash === curr.evidence.code.changeSetHash) allNovel = false;
     }
     if (!allNovel) continue;
-    const first = (run[0] ?? 0) + 1;
-    const last = (run[run.length - 1] ?? 0) + 1;
+    const first = (run.indices[0] ?? 0) + 1;
+    const last = (run.indices[run.indices.length - 1] ?? 0) + 1;
     findings.push({
       kind: 'dead-end',
       attemptRange: [first, last],
-      detail: `${run.length} different patches, same failure signature ${currentHash ?? '?'}`,
-      confidence: run.length >= 3 ? 'HIGH' : 'MEDIUM',
+      detail: `${run.indices.length} different patches, same failure signature ${run.hash}`,
+      confidence: run.indices.length >= 3 ? 'HIGH' : 'MEDIUM',
     });
   }
 
