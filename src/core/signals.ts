@@ -10,6 +10,9 @@ import type { AttemptEvidence } from './types.js';
 
 export type DebtLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
+/** Marker for "runtime observed, no crash present" (POC-01 clean-marker rule). */
+export const CLEAN_RUNTIME = '(no crash observed)';
+
 /** Signals describing the transition between two consecutive attempts. */
 export interface PairSignals {
   fromAttemptId: string;
@@ -54,13 +57,27 @@ export function pairSignals(prev: AttemptEvidence, curr: AttemptEvidence): PairS
       ? null
       : curr.tests.failedCount - prev.tests.failedCount;
 
+  // A signature that was present and is now null counts as CHANGED when the
+  // current attempt actually observed the runtime (performed): "crash present
+  // -> looked, crash gone" is a real transition, not a missing observation.
+  const crashChanged =
+    differs(prev.runtime.crashSignature, curr.runtime.crashSignature) ??
+    (prev.runtime.crashSignature !== null && curr.verification.performed && curr.runtime.crashSignature === null
+      ? true
+      : null);
+  const screenChanged =
+    differs(prev.runtime.screenSignature, curr.runtime.screenSignature) ??
+    (prev.runtime.screenSignature !== null && curr.verification.performed && curr.runtime.screenSignature === null
+      ? true
+      : null);
+
   return {
     fromAttemptId: prev.attemptId,
     toAttemptId: curr.attemptId,
     buildChanged: differs(prev.build.status, curr.build.status),
     failedTestsDelta: failedDelta,
-    crashChanged: differs(prev.runtime.crashSignature, curr.runtime.crashSignature),
-    screenChanged: differs(prev.runtime.screenSignature, curr.runtime.screenSignature),
+    crashChanged,
+    screenChanged,
     codeNovelty: differs(prev.code.changeSetHash, curr.code.changeSetHash),
     verificationPerformed: curr.verification.performed,
     changedFilesCount: curr.code.changedFilesCount,
@@ -121,7 +138,12 @@ export function seriesSignals(attempts: AttemptEvidence[]): SeriesSignals {
     attemptCount: attempts.length,
     changedImplementations: attempts.filter((a) => isCodeChanging(a)).length,
     pairs,
-    sameCrashStreak: trailingIdenticalStreak(attempts.map((a) => a.runtime.crashSignature)),
+    // "Observed clean" counts as a value for crash stability: an app that was
+    // really launched and produced no crash is a stable observation, while a
+    // never-verified attempt (performed=false) stays null and breaks streaks.
+    sameCrashStreak: trailingIdenticalStreak(
+      attempts.map((a) => a.runtime.crashSignature ?? (a.verification.performed ? CLEAN_RUNTIME : null)),
+    ),
     sameScreenStreak: trailingIdenticalStreak(attempts.map((a) => a.runtime.screenSignature)),
     sameTestsStreak: trailingIdenticalStreak(attempts.map((a) => a.tests.failedCount)),
     verificationDebtStreak: debtStreak,

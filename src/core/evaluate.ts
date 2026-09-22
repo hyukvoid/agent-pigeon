@@ -58,19 +58,25 @@ export function evaluatePair(prev: AttemptEvidence, curr: AttemptEvidence): Pair
 
 /**
  * Dead-end candidate: repeated code novelty with a frozen app. Requires at
- * least 3 attempts of different patches where crash, screen and failed-test
- * counts never moved — and requires runtime evidence to exist (streaks only
- * count non-null observations), so fixture-C-style no-verification runs do not
+ * least 3 attempts of different patches where the runtime never moved — no
+ * screen change, no crash transition, no test-count movement on any observed
+ * pair — and requires runtime evidence to exist (streaks only count real or
+ * clean observations), so fixture-C-style no-verification runs do not
  * masquerade as dead ends; they are caught by verification debt instead.
+ * Unknown test counts (null) do not block the verdict; a known unchanged
+ * count still appears via sameTestsStreak in the report.
  */
 export function detectDeadEnd(attempts: AttemptEvidence[], signals: SeriesSignals): boolean {
   if (attempts.length < 3) return false;
   if (!signals.pairs.every((p) => p.codeNovelty === true)) return false;
-  return (
-    signals.sameCrashStreak >= 3 &&
-    signals.sameScreenStreak >= 3 &&
-    signals.sameTestsStreak >= 3
+  const runtimeMoved = signals.pairs.some(
+    (p) =>
+      p.crashChanged === true ||
+      p.screenChanged === true ||
+      (p.failedTestsDelta !== null && p.failedTestsDelta !== 0),
   );
+  if (runtimeMoved) return false;
+  return signals.sameCrashStreak >= 3 && signals.sameScreenStreak >= 3;
 }
 
 export interface ScenarioEvaluation {
