@@ -1,0 +1,44 @@
+{
+  "name": "agent-pigeon",
+  "version": "0.1.0",
+  "description": "Your agent changed the code. Did the Android app actually get better? A local-first critic that judges AI coding agents on Android runtime evidence, not code activity.",
+  "keywords": [
+    "android",
+    "claude-code",
+    "coding-agent",
+    "gradle",
+    "logcat",
+    "agent-evaluation",
+    "jev"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "bin": {
+    "agent-pigeon": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "fixtures",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/",
+    "eval": "npm run build && node dist/cli.js eval",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  }
+}
