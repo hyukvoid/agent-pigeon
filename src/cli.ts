@@ -16,7 +16,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 
-import { discoverSessions, analyzeFile } from './replay/corpus.js';
+import { discoverSessions, scanSessions } from './replay/corpus.js';
 import type { SessionAnalysis } from './replay/corpus.js';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -91,20 +91,14 @@ function parseReplayArgs(argv: string[]): ReplayArgs {
 function runReplay(args: ReplayArgs): void {
   const startedAt = performance.now();
   const discovered = discoverSessions({ claudeDir: args.claudeDir, codexDir: args.codexDir });
-  const sessions: SessionAnalysis[] = [];
-  for (const entry of discovered.files) {
-    if (args.source !== 'all' && entry.source !== args.source) continue;
-    try {
-      sessions.push(analyzeFile(entry.path, entry.source));
-    } catch {
-      // unreadable/corrupt session files are skipped — analysis must never fail
-    }
-  }
+  const considered = discovered.files.filter((e) => args.source === 'all' || e.source === args.source);
+  const { sessions, unreadable } = scanSessions(considered);
 
   const counts = {
-    scanned: sessions.length + countUnreadable(sessions),
+    scanned: considered.length,
     claude: sessions.filter((s) => s.source === 'claude').length,
     codex: sessions.filter((s) => s.source === 'codex').length,
+    unreadable,
   };
   const usable = sessions.filter((s) => s.attempts.length > 0);
   const totalAttempts = usable.reduce((sum, s) => sum + s.attempts.length, 0);
@@ -156,6 +150,9 @@ function runReplay(args: ReplayArgs): void {
   lines.push('Agent Pigeon — replay');
   lines.push('');
   lines.push(L('Scanned', `${humanCount(counts.scanned)} sessions (claude ${counts.claude} · codex ${counts.codex})`));
+  if (counts.unreadable > 0) {
+    lines.push(L('Unreadable', `${humanCount(counts.unreadable)} session file(s) skipped`));
+  }
   lines.push(L('Sessions with attempts', `${usable.length}`));
   lines.push(L('Implementation attempts', humanCount(totalAttempts)));
   lines.push(L('Implementation changes', humanCount(implementationCalls)));
@@ -176,10 +173,6 @@ function runReplay(args: ReplayArgs): void {
   lines.push('Read-only analysis. Nothing was modified, stored, or uploaded.');
   void workerMs;
   process.stdout.write(lines.join('\n') + '\n');
-}
-
-function countUnreadable(sessions: SessionAnalysis[]): number {
-  return 0;
 }
 
 // ---------------------------------------------------------------------------

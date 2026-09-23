@@ -29,11 +29,21 @@ const EVENTS_FILE =
 
 const IMPLEMENTATION_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-const TEST_PATTERN =
-  /\b(npm (?:run )?test|pnpm (?:run )?test|yarn test|jest\b|vitest\b|pytest\b|node --test\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b)/i;
-const DEVICE_PATTERN = /\b(adb(?:\.exe)?\s|agent-device\s|emulator\s|maestro\s)/i;
-const BUILD_PATTERN =
-  /\b(gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|npm run build\b|go build\b|dotnet build\b|cargo build\b)/i;
+// MIRROR of src/replay/claude.ts classifyVerificationCommand. The live
+// governor and replay must agree about what counts as evidence; a parity test
+// drives this script and compares it against the TS classifier.
+const SCRIPT_TEST = String.raw`(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:test|tests|spec|e2e|unit)(?::[\w:.-]+)?\b`;
+const SCRIPT_BUILD = String.raw`(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:build|typecheck|type-check|tsc|compile|check|verify|ci)(?::[\w:.-]+)?\b`;
+
+const TEST_PATTERN = new RegExp(
+  String.raw`\b(${SCRIPT_TEST}|jest\b|vitest\b|pytest\b|node --test\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b|mvn\b[^|;&]*\btest\b|dotnet test\b)`,
+  'i',
+);
+const DEVICE_PATTERN = /\b(adb(?:\.exe)?\s|agent-device\s|emulator\s|maestro\s|xcrun\s)/i;
+const BUILD_PATTERN = new RegExp(
+  String.raw`\b(${SCRIPT_BUILD}|gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|go build\b|dotnet build\b|cargo build\b)`,
+  'i',
+);
 
 // --- per-install secret (race-safe, POC-04A.1) ----------------------------
 // Mirrors src/replay/secret.ts. Lives OUTSIDE any repository

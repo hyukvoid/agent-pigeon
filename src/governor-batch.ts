@@ -17,7 +17,7 @@
  * broken hook.
  */
 
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { atomicWriteJson, pigeonHome } from './replay/secret.js';
 import { computeGovernorDecision } from './governor/governor.js';
@@ -30,6 +30,14 @@ interface StoredGovernorEvent extends GovernorEvent {
 
 const LOCK_TIMEOUT_MS = 1500;
 const LOCK_POLL_MS = 25;
+/**
+ * A lock older than this cannot belong to a live invocation: the critical
+ * section is a single read plus one atomic write (single-digit ms). Anything
+ * older is a leftover from a killed process. Without recovery such a file
+ * silences the governor permanently AND costs LOCK_TIMEOUT_MS on every later
+ * model call, because a timeout does not delete anything.
+ */
+const LOCK_STALE_MS = 10_000;
 
 function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -66,6 +74,20 @@ function readState(statePath: string): GovernorState {
   }
 }
 
+/**
+ * Delete a lock left behind by a killed process. Racing breakers are safe:
+ * unlink succeeds for at most one of them, and the following exclusive create
+ * still admits exactly one holder.
+ */
+function breakIfStale(lockPath: string): void {
+  try {
+    if (Date.now() - statSync(lockPath).mtimeMs < LOCK_STALE_MS) return;
+    unlinkSync(lockPath);
+  } catch {
+    // vanished or unreadable: the normal create/poll path handles it
+  }
+}
+
 /** Exclusive lock so concurrent batch invocations serialize read→latch. */
 function acquireLock(lockPath: string): boolean {
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
@@ -77,6 +99,7 @@ function acquireLock(lockPath: string): boolean {
       return true;
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return false;
+      breakIfStale(lockPath);
       sleep(LOCK_POLL_MS);
     }
   }

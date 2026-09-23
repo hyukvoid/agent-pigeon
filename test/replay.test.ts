@@ -8,6 +8,7 @@ import {
   parseClaudeSessionJsonl,
 } from '../src/replay/claude.js';
 import { segmentIntoAttempts } from '../src/replay/segment.js';
+import { scanSessions } from '../src/replay/corpus.js';
 import { analyzeAttempts } from '../src/replay/analyze.js';
 import type { ReplayAttempt } from '../src/replay/types.js';
 import type { AttemptEvidence } from '../src/core/types.js';
@@ -54,6 +55,29 @@ describe('command classification', () => {
     assert.equal(classifyVerificationCommand('tsc -p tsconfig.json'), 'build');
     assert.equal(classifyVerificationCommand('pwd && ls'), null);
     assert.equal(classifyVerificationCommand('cat package.json'), null);
+  });
+
+  it('recognizes package-manager script indirection', () => {
+    // Most repos never invoke tsc/jest directly.
+    assert.equal(classifyVerificationCommand('npm run typecheck'), 'build');
+    assert.equal(classifyVerificationCommand('npm run type-check'), 'build');
+    assert.equal(classifyVerificationCommand('pnpm run compile'), 'build');
+    assert.equal(classifyVerificationCommand('yarn check'), 'build');
+    assert.equal(classifyVerificationCommand('npm run ci'), 'build');
+    assert.equal(classifyVerificationCommand('pnpm run build:prod'), 'build');
+    assert.equal(classifyVerificationCommand('pnpm run test:unit'), 'test');
+    assert.equal(classifyVerificationCommand('yarn e2e'), 'test');
+    assert.equal(classifyVerificationCommand('bun test'), 'test');
+  });
+
+  it('does not treat lint/format scripts as proof that code works', () => {
+    assert.equal(classifyVerificationCommand('npm run lint'), null);
+    assert.equal(classifyVerificationCommand('npm run format'), null);
+    assert.equal(classifyVerificationCommand('npx prettier --write .'), null);
+    // near-misses must not match the script allowlist
+    assert.equal(classifyVerificationCommand('npm run checkout-branch'), null);
+    assert.equal(classifyVerificationCommand('npm install'), null);
+    assert.equal(classifyVerificationCommand('npm run start'), null);
   });
 
   it('extracts only failed-test numbers', () => {
@@ -204,3 +228,24 @@ function userToolResult(
     message: { content: [{ type: 'tool_result', tool_use_id: id, is_error: isError, content: text }] },
   });
 }
+
+describe('corpus scan accounting', () => {
+  it('counts unreadable session files instead of silently dropping them', () => {
+    const missing = join(fixturesRoot, 'does-not-exist', 'nope.jsonl');
+    const real = join(fixturesRoot, 'codex', 'sample-rollout.jsonl');
+    const result = scanSessions([
+      { path: real, source: 'codex' },
+      { path: missing, source: 'claude' },
+      { path: missing, source: 'codex' },
+    ]);
+    assert.equal(result.sessions.length, 1, 'readable sessions are still analyzed');
+    assert.equal(result.unreadable, 2, 'unreadable files are counted, not hidden');
+  });
+
+  it('reports zero unreadable for a fully readable list', () => {
+    const real = join(fixturesRoot, 'codex', 'sample-rollout.jsonl');
+    const result = scanSessions([{ path: real, source: 'codex' }]);
+    assert.equal(result.unreadable, 0);
+    assert.equal(result.sessions.length, 1);
+  });
+});

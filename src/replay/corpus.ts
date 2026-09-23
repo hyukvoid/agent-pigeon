@@ -108,3 +108,27 @@ export function discoverSessions(opts: { claudeDir?: string; codexDir?: string }
 export function analyzeFile(path: string, source: 'codex' | 'claude'): SessionAnalysis {
   return source === 'codex' ? analyzeCodexFile(path) : analyzeClaudeFile(path);
 }
+
+export interface ScanResult {
+  sessions: SessionAnalysis[];
+  /** Files that were discovered but could not be read/analyzed. */
+  unreadable: number;
+}
+
+/**
+ * Analyze a list of discovered session files. Individual failures never abort
+ * the scan, but they ARE counted: a summary that reports only the files it
+ * managed to parse silently under-reports the history it looked at.
+ */
+export function scanSessions(files: { path: string; source: 'codex' | 'claude' }[]): ScanResult {
+  const sessions: SessionAnalysis[] = [];
+  let unreadable = 0;
+  for (const entry of files) {
+    try {
+      sessions.push(analyzeFile(entry.path, entry.source));
+    } catch {
+      unreadable++;
+    }
+  }
+  return { sessions, unreadable };
+}

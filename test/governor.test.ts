@@ -1,10 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { computeGovernorDecision } from '../src/governor/governor.js';
+import { classifyVerificationCommand } from '../src/replay/claude.js';
 import type { GovernorEvent, GovernorState } from '../src/governor/governor.js';
 import { repoRoot } from './paths.js';
 
@@ -255,6 +256,40 @@ describe('POC-04A.1 PostToolBatch delivery (scenarios A–H)', () => {
     h.cleanup();
   });
 
+  it('I: a leftover lock from a killed invocation self-heals', () => {
+    const h = makeHarness();
+    h.edit('A');
+    h.edit('B');
+    h.edit('C');
+    // A previous batch process was killed after acquiring the lock. Without
+    // stale-lock recovery this silences the governor forever AND costs the
+    // full lock timeout on every later model call.
+    const lock = join(h.home, 'governor-batch.lock');
+    writeFileSync(lock, '999999', 'utf8');
+    const stale = new Date(Date.now() - 60_000);
+    utimesSync(lock, stale, stale);
+
+    const result = h.batch();
+    assert.equal(result.code, 0);
+    assert.ok(result.parsed, 'a stale lock must not permanently disable delivery');
+    assert.equal(existsSync(lock), false, 'lock released after the run');
+    h.cleanup();
+  });
+
+  it('I2: a lock held by a live invocation is still respected (fail open, silent)', () => {
+    const h = makeHarness();
+    h.edit('A');
+    h.edit('B');
+    h.edit('C');
+    // Freshly created lock = another batch process is inside the critical
+    // section right now. Breaking it would risk a double warning.
+    writeFileSync(join(h.home, 'governor-batch.lock'), String(process.pid), 'utf8');
+    const result = h.batch();
+    assert.equal(result.code, 0);
+    assert.equal(result.stdout, '', 'contended lock stays silent rather than racing');
+    h.cleanup();
+  });
+
   it('H: productive fix/test sequence → silent', () => {
     const h = makeHarness();
     for (const tag of ['A', 'B', 'C']) {
@@ -313,5 +348,71 @@ describe('governor trigger rules (unit)', () => {
       ev({ changeFingerprint: 'p4', fingerprintBasis: 'path' }),
     ];
     assert.equal(computeGovernorDecision(events, state).policy, 'SILENT');
+  });
+});
+
+describe('live hook / replay classifier parity', () => {
+  // The observer hook (.mjs, shipped standalone) and the replay parser (TS)
+  // duplicate the verification patterns on purpose — the hook must stay
+  // dependency-free. Nothing tested that the two copies agreed, and they had
+  // silently drifted: the hook knew `node --test` but not `dotnet test`,
+  // `mvn … test`, `xcrun`, `pnpm run build` or `yarn build`. A command that
+  // counts as evidence in replay but not live turns into a false VERIFY_FIRST.
+  const COMMANDS = [
+    'npm test',
+    'npm run typecheck',
+    'npm run build',
+    'pnpm run build',
+    'yarn build',
+    'pnpm run test:unit',
+    'bun test',
+    'node --test dist/test/x.test.js',
+    'tsc -p tsconfig.json',
+    'dotnet test',
+    'mvn -q verify test',
+    './gradlew assembleDebug',
+    'adb shell am start -n com.x/.Main',
+    'xcrun simctl boot booted',
+    'npx agent-device snapshot -i',
+    'npm run lint',
+    'npm install',
+    'git diff',
+    'cat package.json',
+  ];
+
+  it('the shipped observer hook classifies commands exactly like the replay parser', () => {
+    const home = mkdtempSync(join(tmpdir(), 'pigeon-parity-'));
+    const eventsPath = join(home, 'events.jsonl');
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      AGENT_PIGEON_HOME: home,
+      AGENT_PIGEON_EVENTS: eventsPath,
+    };
+    for (const command of COMMANDS) {
+      execSyncVoid(
+        OBSERVE_HOOK,
+        {
+          session_id: SESSION_ID,
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: { command },
+          tool_response: { is_error: false, stdout: '', stderr: '' },
+        },
+        env,
+      );
+    }
+    const lines = readFileSync(eventsPath, 'utf8').split('\n').filter(Boolean);
+    assert.equal(lines.length, COMMANDS.length);
+
+    const mismatches: string[] = [];
+    lines.forEach((line, i) => {
+      const command = COMMANDS[i] as string;
+      const live = (JSON.parse(line) as { verificationKind: string | null }).verificationKind;
+      // the hook uses 'other' where the TS classifier uses null
+      const expected = classifyVerificationCommand(command) ?? 'other';
+      if (live !== expected) mismatches.push(`${command}: hook=${live} replay=${expected}`);
+    });
+    assert.deepEqual(mismatches, [], `classifier drift:\n${mismatches.join('\n')}`);
+    rmSync(home, { recursive: true, force: true });
   });
 });

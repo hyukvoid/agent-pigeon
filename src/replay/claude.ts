@@ -55,11 +55,28 @@ function sha8(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 8);
 }
 
-const TEST_PATTERN =
-  /\b(npm (?:run )?test|pnpm (?:run )?test|yarn test|jest\b|vitest\b|pytest\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b|mvn\b[^|;&]*\btest\b|dotnet test\b)/i;
+/**
+ * Package-manager script indirection. Most repositories do not run `tsc` or
+ * `jest` directly — they run `npm run typecheck`, `pnpm run test:unit`,
+ * `yarn e2e`. Matching only the underlying tool makes real verification
+ * invisible to the classifier (this repository's own fast check is
+ * `npm run typecheck`).
+ *
+ * Deliberately excluded: lint/format/prettier/eslint scripts. They neither
+ * compile nor execute the code, so they are not proof that a change works.
+ */
+const SCRIPT_TEST = String.raw`(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:test|tests|spec|e2e|unit)(?::[\w:.-]+)?\b`;
+const SCRIPT_BUILD = String.raw`(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:build|typecheck|type-check|tsc|compile|check|verify|ci)(?::[\w:.-]+)?\b`;
+
+const TEST_PATTERN = new RegExp(
+  String.raw`\b(${SCRIPT_TEST}|jest\b|vitest\b|pytest\b|node --test\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b|mvn\b[^|;&]*\btest\b|dotnet test\b)`,
+  'i',
+);
 const DEVICE_PATTERN = /\b(adb(?:\.exe)?\s|agent-device\s|emulator\s|maestro\s|xcrun\s)/i;
-const BUILD_PATTERN =
-  /\b(gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|npm run build\b|pnpm run build\b|yarn build\b|go build\b|dotnet build\b|cargo build\b)/i;
+const BUILD_PATTERN = new RegExp(
+  String.raw`\b(${SCRIPT_BUILD}|gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|go build\b|dotnet build\b|cargo build\b)`,
+  'i',
+);
 
 export function classifyVerificationCommand(command: string): VerificationKind | null {
   if (TEST_PATTERN.test(command)) return 'test';
