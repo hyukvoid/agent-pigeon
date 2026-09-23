@@ -29,6 +29,8 @@ interface HookEvent {
   fingerprintBasis?: 'content' | 'path' | null;
   verificationKind: string | null;
   testsFailedCount?: number | null;
+  /** Batch/turn ordinal (revised live design; optional). */
+  turn?: number | null;
 }
 
 const IMPLEMENTATION_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -53,6 +55,8 @@ function toReplayEvent(event: HookEvent, epochMs: number): SanitizedReplayEvent 
       failureSignatureHash: null,
       testsFailedCount: null,
       durationMs: null,
+      turn: event.turn ?? null,
+      testOnly: null,
     };
   }
   if (event.toolName === 'Bash' && event.verificationKind !== null && event.verificationKind !== 'other') {

@@ -40,6 +40,7 @@ function attemptOf(
     failureSignatureHash: overrides.failureSignatureHash ?? null,
     verificationKinds: overrides.performed ? ['test'] : [],
     implementationEvents: overrides.implementationEvents ?? 1,
+    implTurns: [],
     timestampOffset: index * 1000,
   };
 }
@@ -136,7 +137,11 @@ describe('attempt segmentation', () => {
     const debt = analysis.findings[0];
     assert.ok(debt);
     assert.equal(debt.kind, 'verification-debt');
-    assert.equal(debt.confidence, 'HIGH');
+    // POC-04C.2: this legacy fixture has no turn boundaries, so the 11 raw
+    // calls cannot be proven to be distinct implementation turns — the debt
+    // stays, but confidence drops to MEDIUM (call-volume fallback).
+    assert.equal(debt.confidence, 'MEDIUM');
+    assert.match(debt.detail, /11 implementation calls/u);
     assert.match(analysis.verdict, /⏸ Verification debt/u);
   });
 

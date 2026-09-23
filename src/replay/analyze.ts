@@ -51,28 +51,63 @@ export function analyzeAttempts(attempts: ReplayAttempt[]): ReplayAnalysis {
   const verificationRuns = attempts.reduce((sum, a) => sum + a.verificationKinds.length, 0);
   const implementationCalls = attempts.reduce((sum, a) => sum + a.implementationEvents, 0);
 
-  // --- Verification debt ---------------------------------------------------
-  // (a) consecutive unverified attempts
-  for (const run of runsof(attempts, (a) => !a.evidence.verification.performed)) {
-    if (run.length < 2) continue;
-    const first = (run[0] ?? 0) + 1;
-    const last = (run[run.length - 1] ?? 0) + 1;
-    findings.push({
-      kind: 'verification-debt',
-      attemptRange: [first, last],
-      detail: `${run.length} consecutive implementation attempts without any verification run`,
-      confidence: run.length >= 3 ? 'HIGH' : 'MEDIUM',
-    });
+  // --- Verification debt (turn-based, POC-04C.2) ---------------------------
+  // Unit of evidence: the model TURN. A run of consecutive implementation
+  // turns with no verification is debt. Raw Edit/Write calls inside ONE turn
+  // are one logical attempt (a fix plus its import and type edits are not
+  // three attempts), and test-only turns are verification preparation, not
+  // implementation. Fall back to one synthetic turn per attempt for sources
+  // without turn boundaries.
+  const region: number[] = [];
+  for (let i = attempts.length - 1; i >= 0; i--) {
+    const attempt = attempts[i];
+    if (attempt === undefined || attempt.evidence.verification.performed) break;
+    region.unshift(i);
   }
-  // (b) a single window stacking many implementation calls with no verification
-  for (const attempt of attempts) {
-    if (!attempt.evidence.verification.performed && attempt.implementationEvents >= 3) {
+
+  const turnIds = new Set<string>();
+  let fallbackTurns = false;
+  for (const i of region) {
+    const attempt = attempts[i];
+    if (attempt === undefined) continue;
+    if (attempt.implTurns.length > 0) {
+      for (const t of attempt.implTurns) turnIds.add(`t${t}`);
+    } else {
+      turnIds.add(`a${i}`);
+      fallbackTurns = true;
+    }
+  }
+  const distinctTurns = turnIds.size;
+
+  if (region.length >= 1) {
+    const first = (region[0] ?? 0) + 1;
+    const last = (region[region.length - 1] ?? 0) + 1;
+    if (distinctTurns >= 3) {
       findings.push({
         kind: 'verification-debt',
-        attemptRange: [attempt.index + 1, attempt.index + 1],
-        detail: `${attempt.implementationEvents} implementation calls were made without collecting any verification evidence`,
-        confidence: attempt.implementationEvents >= 5 ? 'HIGH' : 'MEDIUM',
+        attemptRange: [first, last],
+        detail: `${distinctTurns} distinct implementation turns were made without collecting any verification evidence`,
+        confidence: distinctTurns >= 3 ? 'HIGH' : 'MEDIUM',
       });
+    } else if (distinctTurns === 2 && region.length >= 2) {
+      findings.push({
+        kind: 'verification-debt',
+        attemptRange: [first, last],
+        detail: `2 consecutive implementation attempts without any verification run`,
+        confidence: 'MEDIUM',
+      });
+    } else if (fallbackTurns && region.length === 1) {
+      // Turn-unaware source: only the old call-volume signal remains, and it
+      // is weak (POC-04C.2: many calls are usually one coherent change).
+      const attempt = attempts[region[0] ?? 0];
+      if (attempt !== undefined && attempt.implementationEvents >= 5) {
+        findings.push({
+          kind: 'verification-debt',
+          attemptRange: [first, last],
+          detail: `${attempt.implementationEvents} implementation calls were made without collecting any verification evidence`,
+          confidence: 'MEDIUM',
+        });
+      }
     }
   }
 

@@ -36,6 +36,8 @@ export interface CodexSession {
   epochMs: number | null;
   /** True when any command matched a mobile/Android signal (in-memory only). */
   mobileSignal: boolean;
+  /** True when the session carried turn boundaries (turn_context lines). */
+  turnAware: boolean;
   events: SanitizedReplayEvent[];
   tokenRecords: CodexTokenRecord[];
 }
@@ -58,6 +60,9 @@ interface CodexLine {
 }
 
 const lf = (text: string): string => text.replace(/\r\n?/gu, '\n');
+
+/** Test/spec file paths: editing these is verification preparation (POC-04C.2). */
+const TEST_PATH = /(^|\/)(tests?|__tests__|spec)(\/|$)|\.(test|spec)\.[a-z]+$/i;
 
 /** Mobile/Android context signals (POC-04B §5) — evaluated in memory only. */
 const MOBILE_PATTERN =
@@ -104,6 +109,7 @@ function extractInnerVerificationCommand(program: string): { kind: VerificationK
 /** Codex `apply_patch` unified format: extract file ops without storing them. */
 function parseApplyPatch(patch: string): {
   changedFilesCount: number;
+  paths: string[];
   pathHash: string | null;
   fingerprintParts: string[];
 } {
@@ -115,6 +121,7 @@ function parseApplyPatch(patch: string): {
   const unique = [...new Set(paths)];
   return {
     changedFilesCount: unique.length,
+    paths: unique,
     pathHash: unique.length > 0 ? pathFingerprintFor(unique) : null,
     // The whole patch body is the change content: materially different
     // patches hash differently, re-applying the same patch hashes the same.
@@ -147,6 +154,9 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
   let cwd: string | null = null;
   let mobileSignal = false;
   let epochMs: number | null = null;
+  // Model-turn ordinal: `turn_context` lines are deterministic turn boundaries.
+  let turnSeq = 0;
+  let turnSeen = false;
   let sawTimestamp = false;
 
   /** call_id → metadata for pairing outputs back to their events. */
@@ -168,6 +178,12 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
     }
     const p = obj.payload;
     if (p === null || typeof p !== 'object') continue;
+
+    if (obj.type === 'turn_context') {
+      turnSeq++;
+      turnSeen = true;
+      continue;
+    }
 
     if (obj.type === 'session_meta') {
       const meta = obj.payload as unknown as { id?: unknown; cwd?: unknown };
@@ -219,6 +235,7 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
               : '';
         const parsed = parseApplyPatch(patchText);
         const basis = parsed.fingerprintParts.length > 0 ? ('content' as const) : ('path' as const);
+        const testOnly = parsed.paths.length > 0 && parsed.paths.every((pth) => TEST_PATH.test(pth));
         pending.set(callId, { isVerification: false, verificationKind: null, eventIndex: events.length });
         pushEvent({
           eventType: 'implementation',
@@ -235,6 +252,8 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
           failureSignatureHash: null,
           testsFailedCount: null,
           durationMs: null,
+          turn: turnSeen ? turnSeq : null,
+          testOnly,
         });
       } else if (p.name === 'exec' || p.name === 'shell_command') {
         // Outer `exec` input is a JS PROGRAM that drives inner tools
@@ -262,6 +281,7 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
           const allPaths = [...patches.paths];
           const pathHash = allPaths.length > 0 ? pathFingerprint(secret(), allPaths) : null;
           const basis = 'content' as const;
+          const testOnly = allPaths.length > 0 && allPaths.every((pth) => TEST_PATH.test(pth));
           pending.set(callId, { isVerification: false, verificationKind: null, eventIndex: events.length });
           pushEvent({
             eventType: 'implementation',
@@ -275,6 +295,8 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
             failureSignatureHash: null,
             testsFailedCount: null,
             durationMs: null,
+            turn: turnSeen ? turnSeq : null,
+            testOnly,
           });
         }
 
@@ -378,6 +400,7 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
     cwd,
     epochMs,
     mobileSignal,
+    turnAware: turnSeen,
     events,
     tokenRecords: tokenRecords.sort((a, b) => a.timestampMs - b.timestampMs),
   };

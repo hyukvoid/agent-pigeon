@@ -55,6 +55,9 @@ function sha8(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 8);
 }
 
+/** Test/spec file paths (POC-04C.2): editing these is verification preparation, not a new implementation attempt. */
+const TEST_PATH = /(^|\/)(tests?|__tests__|spec)(\/|$)|\.(test|spec)\.[a-z]+$/i;
+
 /**
  * Package-manager script indirection. Most repositories do not run `tsc` or
  * `jest` directly — they run `npm run typecheck`, `pnpm run test:unit`,
@@ -218,6 +221,17 @@ function contentText(content: string | ToolResultContent[] | undefined): string 
   return '';
 }
 
+
+function implementationTouchesOnlyTestFiles(input: ImplementationInput): boolean {
+  const paths: string[] = [];
+  if (typeof input.file_path === 'string') paths.push(input.file_path);
+  else if (Array.isArray(input.file_path)) {
+    paths.push(...input.file_path.filter((p): p is string => typeof p === 'string'));
+  }
+  if (paths.length === 0) return false;
+  return paths.every((p) => TEST_PATH.test(p));
+}
+
 /** Parse one session JSONL (as a string) into sanitized events + meta. */
 export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'session'): ReplaySession {
   const lines = text.split(/\r?\n/u).filter((line) => line.length > 0);
@@ -230,6 +244,8 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
   const events: SanitizedReplayEvent[] = [];
 
   let epochMs: number | null = null;
+  // Model-turn ordinal: each assistant message is one turn/batch (POC-04C.2).
+  let turnSeq = 0;
   // Per-install HMAC key for change/path fingerprints (loaded once per parse).
   const secret = loadOrCreateSecret();
   /** tool_use_id -> in-flight call (toolName + kind), for pairing results. */
@@ -270,11 +286,21 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
     const content = obj.message?.content;
     if (!Array.isArray(content)) continue;
 
+    // One assistant message = one model turn / tool batch (POC-04C.2). All
+    // implementation calls inside it are ONE logical change, not N attempts.
+    const messageHasImpl =
+      obj.type === 'assistant' &&
+      content.some((c) => c.type === 'tool_use' && typeof c.name === 'string' && IMPLEMENTATION_TOOLS.includes(c.name));
+    if (messageHasImpl) turnSeq++;
+    const messageTurn: number | null = messageHasImpl ? turnSeq : null;
+
     for (const block of content) {
       if (obj.type === 'assistant' && block.type === 'tool_use' && typeof block.name === 'string') {
         const toolName = block.name;
         if (IMPLEMENTATION_TOOLS.includes(toolName)) {
-          const change = changeIdentityFromInput((block.input ?? {}) as ImplementationInput, secret);
+          const input = (block.input ?? {}) as ImplementationInput;
+          const change = changeIdentityFromInput(input, secret);
+          const testOnly = implementationTouchesOnlyTestFiles(input);
           const id = (block as unknown as { id?: string }).id ?? '';
           pending.set(id, { toolName, verificationKind: null, change });
           events.push({
@@ -289,6 +315,8 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
             failureSignatureHash: null,
             testsFailedCount: null,
             durationMs: null,
+            turn: messageTurn,
+            testOnly,
           });
         } else if (toolName === 'Bash') {
           const command = typeof (block.input as { command?: unknown } | undefined)?.command === 'string'
