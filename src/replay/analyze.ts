@@ -79,7 +79,14 @@ export function analyzeAttempts(attempts: ReplayAttempt[]): ReplayAnalysis {
   }
   const distinctTurns = turnIds.size;
 
-  if (region.length >= 1) {
+  // Scaffolding carve-out (POC-04C.2 dogfood): a stretch made ONLY of
+  // new-file writes has nothing runnable to verify yet. Stay silent; the
+  // activity still shows in the activity counts.
+  const regionWrites = region.reduce((sum, i) => sum + (attempts[i]?.implWrites ?? 0), 0);
+  const regionEdits = region.reduce((sum, i) => sum + (attempts[i]?.implEdits ?? 0), 0);
+  const creationOnly = regionWrites > 0 && regionEdits === 0;
+
+  if (region.length >= 1 && !creationOnly) {
     const first = (region[0] ?? 0) + 1;
     const last = (region[region.length - 1] ?? 0) + 1;
     if (distinctTurns >= 3) {

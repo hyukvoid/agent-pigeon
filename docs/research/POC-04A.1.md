@@ -1,3 +1,5 @@
+> **STATUS (v0.1 release)**: superseded — live delivery was withheld from v0.1 after the behavioral dogfood (0 useful warnings). The watermark/anti-spam engineering below is preserved under `experimental/`. See [docs/research/CLAUDE-KIRO-DOGFOOD.md](CLAUDE-KIRO-DOGFOOD.md).
+
 # POC-04A.1 — Live Delivery & Concurrency Gate — Findings
 
 - Date: 2026-09-22

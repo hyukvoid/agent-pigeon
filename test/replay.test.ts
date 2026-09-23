@@ -41,6 +41,8 @@ function attemptOf(
     verificationKinds: overrides.performed ? ['test'] : [],
     implementationEvents: overrides.implementationEvents ?? 1,
     implTurns: [],
+    implWrites: 0,
+    implEdits: 0,
     timestampOffset: index * 1000,
   };
 }

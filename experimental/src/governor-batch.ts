@@ -19,9 +19,9 @@
 
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { atomicWriteJson, pigeonHome } from './replay/secret.js';
-import { computeGovernorDecision } from './governor/governor.js';
-import type { GovernorEvent, GovernorState } from './governor/governor.js';
+import { atomicWriteJson, pigeonHome } from '../../src/replay/secret.js';
+import { computeGovernorDecision } from '../../src/governor/governor.js';
+import type { GovernorEvent, GovernorState } from '../../src/governor/governor.js';
 
 /** Stored observer events additionally carry the truncated session id. */
 interface StoredGovernorEvent extends GovernorEvent {

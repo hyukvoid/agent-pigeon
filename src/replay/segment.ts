@@ -36,6 +36,8 @@ export function segmentWithWindows(events: SanitizedReplayEvent[]): Segmentation
 
   interface OpenWindow {
     implementationEvents: number;
+    implWrites: number;
+    implEdits: number;
     changedFilePathHashes: Set<string>;
     implTurns: Set<number>;
     verification: SanitizedReplayEvent[];
@@ -44,6 +46,8 @@ export function segmentWithWindows(events: SanitizedReplayEvent[]): Segmentation
 
   const open: OpenWindow = {
     implementationEvents: 0,
+    implWrites: 0,
+    implEdits: 0,
     changedFilePathHashes: new Set<string>(),
     implTurns: new Set<number>(),
     verification: [],
@@ -97,6 +101,8 @@ export function segmentWithWindows(events: SanitizedReplayEvent[]): Segmentation
         .map((v) => v.verificationKind)
         .filter((kind): kind is NonNullable<typeof kind> => kind !== null),
       implementationEvents: open.implementationEvents,
+      implWrites: open.implWrites,
+      implEdits: open.implEdits,
       implTurns: [...open.implTurns],
       timestampOffset: open.timestampOffset,
     };
@@ -109,6 +115,8 @@ export function segmentWithWindows(events: SanitizedReplayEvent[]): Segmentation
     });
 
     open.implementationEvents = 0;
+    open.implWrites = 0;
+    open.implEdits = 0;
     open.changedFilePathHashes.clear();
     open.implTurns.clear();
     open.verification = [];
@@ -119,6 +127,8 @@ export function segmentWithWindows(events: SanitizedReplayEvent[]): Segmentation
     if (event.eventType === 'implementation') {
       if (open.verification.length > 0) flush(); // previous attempt is complete
       open.implementationEvents++;
+      if (event.toolName === 'Write') open.implWrites++;
+      else open.implEdits++;
       if (event.changeSetHash !== null) open.changedFilePathHashes.add(event.changeSetHash);
       if (event.turn !== null && event.turn !== undefined && event.testOnly !== true) {
         open.implTurns.add(event.turn);

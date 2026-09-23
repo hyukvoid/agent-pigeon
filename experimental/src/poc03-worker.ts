@@ -14,10 +14,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
-import { evaluateScenario } from './core/evaluate.js';
-import { segmentWithWindows } from './replay/segment.js';
-import { analyzeAttempts } from './replay/analyze.js';
-import type { ReplayAttempt, SanitizedReplayEvent } from './replay/types.js';
+import { evaluateScenario } from '../../src/core/evaluate.js';
+import { segmentWithWindows } from '../../src/replay/segment.js';
+import { analyzeAttempts } from '../../src/replay/analyze.js';
+import type { ReplayAttempt, SanitizedReplayEvent } from '../../src/replay/types.js';
 
 interface HookEvent {
   ts: string;

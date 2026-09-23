@@ -59,6 +59,9 @@ export interface ReplayAttempt {
   verificationKinds: VerificationKind[];
   /** Implementation calls inside this attempt window. */
   implementationEvents: number;
+  /** Breakdown by tool family (POC-04C.2 scaffolding carve-out). */
+  implWrites: number;
+  implEdits: number;
   /**
    * Distinct non-test-only model turns that produced this attempt's changes
    * (POC-04C.2). Empty when the source has no turn boundaries.

@@ -14,8 +14,8 @@ if (home === undefined || eventsPath === undefined) throw new Error('set AGENT_P
 const batchName = process.argv[2] ?? 'batch';
 const calls = JSON.parse(readFileSync(process.argv[3], 'utf8'));
 
-const OBSERVE = 'C:/Agent Pigeon/hooks/hook-posttooluse.mjs';
-const LIVE = 'C:/Agent Pigeon/hooks/governor-live.mjs';
+const OBSERVE = 'C:/Agent Pigeon/experimental/hooks/hook-posttooluse.mjs';
+const LIVE = 'C:/Agent Pigeon/experimental/hooks/governor-live.mjs';
 
 for (const call of calls) {
   const r = spawnSync(process.execPath, [OBSERVE], {

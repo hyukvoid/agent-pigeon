@@ -1,137 +1,102 @@
 # Agent Pigeon
 
-**Different code isn't progress.**
+**Did your coding agent collect proof after changing the code?**
 
-Agent Pigeon checks whether your coding agent collects **proof** — builds, tests, device
-runs — while it works, instead of just counting how much code it changed.
+Agent Pigeon replays your local coding-agent history and reports whether
+implementation activity was followed by **recognized verification evidence** —
+builds, tests, or device runs — or whether the agent kept changing code
+without ever checking that anything works.
+
+```
+$ agent-pigeon replay
+
+Agent Pigeon — replay
+
+  History scanned                   405 sessions
+  Sessions with code changes        94
+  Implementation attempts           442
+  Implementation changes            4,588
+  Recognized verification runs      591
+
+Unverified implementation stretches — 13
+  Stretches where the agent changed code across 3+ separate turns
+  without any recognized verification (build / test / device run).
+  · codex session 019e6e63 · 17 turns · high confidence
+  …
+
+Recognized verification loops — 3
+  Verification failed, then passed. Healthy debugging — no findings here.
+
+Read-only: nothing was modified, stored, or uploaded.
+```
+
+## Why
+
+Coding agents produce enormous amounts of activity. Activity is not progress.
+The single cheapest question you can ask about an agent session is:
+
+> after the code changed, did anything ever run that could prove the change worked?
+
+Agent Pigeon answers that question from your existing session history —
+no configuration, no API keys, no cloud.
+
+## Install & run
+
+Requires Node ≥ 20.11. Windows / Linux / macOS (see Support matrix).
 
 ```bash
-git clone <this repository> && cd agent-pigeon
-npm install && npm run build
-npx agent-pigeon replay          # ← start here: read-only, nothing to configure
-```
-
-> Your agent made 62 changes and never ran a single test.
-> You didn't need an AI to notice that. You needed a pigeon.
-
----
-
-## What it does
-
-**1. Replay (zero setup).** Agent Pigeon reads your local Claude Code / Codex session
-history (read-only) and answers one question per session:
-
-- *Did the agent verify its changes — build, test, or device run — or just keep patching?*
-
-It reports **verification debt**: stretches where the agent changed code again and again
-without collecting any evidence. In one internal corpus of 350 real sessions, the largest
-debt window was **62 consecutive code changes with zero verification runs**.
-
-**2. Live governor (optional).** During real coding sessions, a lightweight hook records
-what the agent *did* (build/test/device verification — never the code itself), and after a
-tool batch the governor may add **one factual reminder** to the agent's context:
-
-```
-Agent Pigeon
-
-3 materially different implementation changes were made without collecting
-new verification evidence.
-
-Verify the current app before another implementation change.
-```
-
-That is the only intervention in v0.1. It fires **once per debt episode**, never on
-productive debugging loops (fail → fix → pass stays silent), and never says "you're stuck"
-or "your approach is wrong" — because a reminder can't know that.
-
-## Install
-
-Requires Node ≥ 20.11.
-
-```bash
-git clone <this repository>
-cd agent-pigeon
-npm install && npm run build
-
-# 30-second first value — analyze your existing local history (read-only):
+git clone https://github.com/hyukvoid/agent-pigeon && cd agent-pigeon
+npm install                       # builds automatically
 npx agent-pigeon replay
 ```
 
-Enable the live governor in the current project:
+Options: `--source claude|codex|all` · `--json` · `--claude-dir` / `--codex-dir`
+to override history locations. `--json` prints the sanitized aggregate for automation.
 
-```bash
-npx agent-pigeon init          # adds two hooks to ./.claude/settings.json
-npx agent-pigeon init --global # or for all projects (~/.claude/settings.json)
-npx agent-pigeon init --dry-run# inspect before writing
-npx agent-pigeon remove        # clean removal, anytime
-```
+## What replay inspects
 
-`init` merges into your existing Claude settings and never touches unrelated
-configuration. Everything it writes is visible in the settings file.
+| History | Status in v0.1 |
+| --- | --- |
+| Claude Code (`~/.claude/projects`) | **parsed** |
+| Codex (`~/.codex/sessions`, rollout JSONL) | **parsed** |
+| Kiro / other agents / other formats | not parsed |
 
-## What replay tells you
+Only these directories are read, read-only. Your projects' source code is
+not read.
 
-```
-Agent Pigeon — replay
+## What the output means
 
-  Scanned                   367 sessions (claude 10 · codex 357)
-  Sessions with attempts    73
-  Implementation attempts   297
-  Implementation changes    4,560
-  Verification runs         392
+- **Implementation changes / turns** — tool calls (and model turns) that
+  changed code.
+- **Recognized verification runs** — build / test / device commands Agent
+  Pigeon can identify (`npm test`, `gradlew`, `pytest`, `adb`, `agent-device`,
+  `tsc`, …).
+- **Unverified implementation stretches** — 3+ separate model turns of code
+  changes with **no recognized verification** in between. These are prompts
+  to inspect, not verdicts: Agent Pigeon does not know your project's
+  definition of proof. Custom verification (smoke runs, bespoke scripts) may
+  be invisible to it — the report says "recognized verification" for that
+  reason.
+- **Recognized verification loops** — verification failed, then passed:
+  healthy debugging, reported so you know the distinction is deliberate.
 
-Verification debt — 28 window(s)
-  Changes made without running anything that could prove they worked.
+## Privacy
 
-Productive verification loops — 2 window(s)
-  Verification failed, then passed. Healthy debugging: no warnings issued.
+- **Reads:** only the history directories above, read-only.
+- **Persists:** nothing. Replay writes no files, creates no state, keeps no
+  cache. Every run recomputes from your history.
+- **Transmits:** nothing. There is no network code in the replay path.
+- **Output:** aggregate counts and short session identifiers. No source
+  code, no diffs, no commands, no prompts.
 
-Read-only analysis. Nothing was modified, stored, or uploaded.
-```
+## Experimental / research
 
-## Trust
-
-- **Reads:** local Claude Code / Codex session files, read-only.
-- **Stores:** small counters, booleans and short digests. Raw source, diffs, commands,
-  prompts, reasoning and transcripts are **never persisted** — they are hashed in memory
-  and discarded.
-- **Hashes:** change identities are `HMAC-SHA256` digests (128-bit) keyed by a per-install
-  random secret that never leaves your machine. Fingerprints are still *sensitive
-  metadata* — they commit your session to "the same change happened again", which is
-  exactly what the governor needs and nothing more.
-- **Sends:** nothing. There is no network access, no telemetry, no model API.
-- **Intervenes:** `VERIFY_FIRST` only — one factual reminder per debt episode.
-  No blocking, no nudge storms, no "you're stuck".
-- **Fails open:** if Agent Pigeon breaks, it goes quiet. Your agent never notices.
-- **Removes cleanly:** `agent-pigeon remove` (or delete the hooks from your settings).
-
-## Android / mobile
-
-Mobile is the flagship deep adapter: verification classification already recognizes
-gradle, adb, logcat, emulator and agent-device activity, and the research prototypes
-include live device/runtime evidence collection (screenshots, crash signatures) via
-[agent-device](https://github.com/callstack/agent-device). No Android tooling is required
-for core replay/live functionality — install mobile tooling only if you want device-level
-proof for Android work.
-
-## Not in v0.1 (on purpose)
-
-- RETHINK-style "your approach is failing" messages — needs stronger real-world evidence.
-- Any model/LLM dependency — deterministic signals decide everything.
-- Telemetry, dashboards, hosted anything.
-
-Known limitations: the live warning's effect on real Claude sessions is not yet measured;
-Codex sessions recorded with Windows-sandbox launch failures are filtered out (they are
-not verification evidence); failure signatures are deliberately conservative.
-
-## Development
-
-```bash
-npm test          # 77 tests: parsers, fingerprints, governor, CLI, privacy invariants
-npm run demo      # runs the original three-scenario demo on bundled fixtures
-```
-
-Architecture and research history: see `POC-00.md` … `POC-04C.md` in the repository.
+A live VERIFY_FIRST governor (a hook that would remind the agent mid-session)
+was built and dogfooded, then **intentionally withheld from v0.1**: in a real
+dogfood its warnings were not useful enough (it could not recognize all forms
+of verification, producing false positives). The code and the full research
+history are preserved under `experimental/`, `docs/research/` and the POC
+reports in this repository. See [docs/research/SUMMARY.md](docs/research/SUMMARY.md).
 
 ## License
 

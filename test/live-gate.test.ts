@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { repoRoot } from './paths.js';
 
-const LIVE = join(repoRoot, 'hooks', 'governor-live.mjs');
-const OBSERVE = join(repoRoot, 'hooks', 'hook-posttooluse.mjs');
+const LIVE = join(repoRoot, 'experimental', 'hooks', 'governor-live.mjs');
+const OBSERVE = join(repoRoot, 'experimental', 'hooks', 'hook-posttooluse.mjs');
 const SESSION = 'gate0000-1111-2222-3333-444444444444';
 
 interface Harness {

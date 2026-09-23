@@ -1,3 +1,5 @@
+> **STATUS (v0.1 release)**: the "REVISED LIVE POLICY WORTH NEXT DOGFOOD" verdict below was written before the real Claude-in-Kiro dogfood. That dogfood (0 useful / 4 FP / 2 annoying) settled it: v0.1 is REPLAY-ONLY. The corpus numbers here were re-validated by the corrected classifier.
+
 # POC-04C — Autonomous Evidence Sprint — Findings
 
 - Date: 2026-09-22

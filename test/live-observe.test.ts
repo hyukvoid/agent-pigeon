@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { repoRoot } from './paths.js';
 
-const POC03 = join(repoRoot, 'dist', 'src', 'poc03.js');
+const POC03 = join(repoRoot, 'dist', 'experimental', 'src', 'poc03-worker.js');
 
 function runWorker(events: unknown[]): { stdout: string; temp: string } {
   const temp = mkdtempSync(join(tmpdir(), 'pigeon-live-'));
@@ -93,13 +93,14 @@ describe('poc:03 live worker', () => {
     const stdout = execFileSync(process.execPath, [POC03, '--events', eventsPath], { encoding: 'utf8' });
     assert.match(stdout, /POC-03/u);
     assert.ok(!stdout.includes('failed:'), 'worker must not crash on malformed lines');
+    rmSync(temp, { recursive: true, force: true });
   });
 });
 
 describe('hook hot-path behavior (contract)', () => {
   it('hook writes only sanitized fields', () => {
     // Sanity-check the shipped hook source for the privacy contract.
-    const hookSource = readFileSync(join(repoRoot, 'hooks', 'hook-posttooluse.mjs'), 'utf8');
+    const hookSource = readFileSync(join(repoRoot, 'experimental', 'hooks', 'hook-posttooluse.mjs'), 'utf8');
     assert.ok(!hookSource.includes('JEV'), 'hook must not reference Jev');
     assert.ok(!hookSource.includes('fetch('), 'hook must not do network I/O');
     assert.match(hookSource, /digest\('hex'\)\.slice\(0, 32\)/u, 'fingerprints stored as 128-bit digests only');

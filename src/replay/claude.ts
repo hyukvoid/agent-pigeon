@@ -164,7 +164,7 @@ interface ImplementationInput {
  */
 function changeIdentityFromInput(
   input: ImplementationInput,
-  secret: string,
+  secret: string | null,
 ): {
   count: number | null;
   hash: string | null;
@@ -176,7 +176,7 @@ function changeIdentityFromInput(
     paths.push(...input.file_path.filter((p): p is string => typeof p === 'string'));
   }
   const unique = [...new Set(paths)];
-  const pathHash = unique.length > 0 ? pathFingerprint(secret, unique) : null;
+  const pathHash = unique.length > 0 && secret !== null ? pathFingerprint(secret, unique) : null;
 
   let op: 'edit' | 'write' | 'notebook' | 'multi-edit' | null = null;
   let parts: string[] | null = null;
@@ -201,7 +201,7 @@ function changeIdentityFromInput(
     }
   }
 
-  if (op !== null && parts !== null) {
+  if (op !== null && parts !== null && secret !== null) {
     return {
       count: unique.length > 0 ? unique.length : null,
       hash: contentFingerprint(secret, op, parts),
@@ -233,7 +233,21 @@ function implementationTouchesOnlyTestFiles(input: ImplementationInput): boolean
 }
 
 /** Parse one session JSONL (as a string) into sanitized events + meta. */
-export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'session'): ReplaySession {
+export interface ParseOptions {
+      /**
+       * Compute HMAC content fingerprints (default true — the research pipeline
+       * needs them). Replay passes false: replay needs no fingerprints, and
+       * skipping them keeps replay genuinely read-only (no secret file is ever
+       * created).
+       */
+      fingerprints?: boolean;
+    }
+
+export function parseClaudeSessionJsonl(
+  text: string,
+  sessionId8Fallback = 'session',
+  opts: ParseOptions = {},
+): ReplaySession {
   const lines = text.split(/\r?\n/u).filter((line) => line.length > 0);
   const meta: ReplaySessionMeta = {
     sessionId8: sessionId8Fallback,
@@ -246,8 +260,9 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
   let epochMs: number | null = null;
   // Model-turn ordinal: each assistant message is one turn/batch (POC-04C.2).
   let turnSeq = 0;
-  // Per-install HMAC key for change/path fingerprints (loaded once per parse).
-  const secret = loadOrCreateSecret();
+  // Per-install HMAC key for change/path fingerprints. Only loaded when
+  // fingerprints are requested — replay runs without it (genuinely read-only).
+  const secret = opts.fingerprints === false ? null : loadOrCreateSecret();
   /** tool_use_id -> in-flight call (toolName + kind), for pairing results. */
   const pending = new Map<
     string,

@@ -64,9 +64,16 @@ export function analyzeEvents(
   };
 }
 
-export function analyzeCodexFile(file: string): SessionAnalysis {
+export interface AnalyzeOptions {
+  /** Compute HMAC content fingerprints (research mode). Default false for
+   * the public replay path: replay needs no fingerprints, and skipping them
+   * keeps replay genuinely read-only (no secret file is ever created). */
+  fingerprints?: boolean;
+}
+
+export function analyzeCodexFile(file: string, opts: AnalyzeOptions = {}): SessionAnalysis {
   const text = readFileSync(file, 'utf8');
-  const session = parseCodexSessionJsonl(text);
+  const session = parseCodexSessionJsonl(text, 'codex', opts);
   return analyzeEvents('codex', session.sessionId8, session.events, {
     mobile: session.mobileSignal,
     epochMs: session.epochMs,
@@ -74,11 +81,13 @@ export function analyzeCodexFile(file: string): SessionAnalysis {
   });
 }
 
-export function analyzeClaudeFile(file: string): SessionAnalysis {
+export function analyzeClaudeFile(file: string, opts: AnalyzeOptions = {}): SessionAnalysis {
   const text = readFileSync(file, 'utf8');
-  const { meta, events } = parseClaudeSessionJsonl(text);
+  const { meta, events } = parseClaudeSessionJsonl(text, 'session', opts);
   return analyzeEvents('claude', meta.sessionId8, events);
 }
+
+
 
 export interface DiscoveredHistory {
   claudeDir: string;
@@ -105,8 +114,8 @@ export function discoverSessions(opts: { claudeDir?: string; codexDir?: string }
   return { claudeDir, codexDir, files };
 }
 
-export function analyzeFile(path: string, source: 'codex' | 'claude'): SessionAnalysis {
-  return source === 'codex' ? analyzeCodexFile(path) : analyzeClaudeFile(path);
+export function analyzeFile(path: string, source: 'codex' | 'claude', opts: AnalyzeOptions = {}): SessionAnalysis {
+  return source === 'codex' ? analyzeCodexFile(path, opts) : analyzeClaudeFile(path, opts);
 }
 
 export interface ScanResult {

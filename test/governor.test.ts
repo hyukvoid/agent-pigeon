@@ -9,8 +9,8 @@ import { classifyVerificationCommand } from '../src/replay/claude.js';
 import type { GovernorEvent, GovernorState } from '../src/governor/governor.js';
 import { repoRoot } from './paths.js';
 
-const OBSERVE_HOOK = join(repoRoot, 'hooks', 'hook-posttooluse.mjs');
-const BATCH_HOOK = join(repoRoot, 'dist', 'src', 'governor-batch.js');
+const OBSERVE_HOOK = join(repoRoot, 'experimental', 'hooks', 'hook-posttooluse.mjs');
+const BATCH_HOOK = join(repoRoot, 'dist', 'experimental', 'src', 'governor-batch.js');
 const SESSION_ID = 'gov00000-1111-2222-3333-444444444444';
 const SESSION8 = SESSION_ID.slice(0, 8);
 

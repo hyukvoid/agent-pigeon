@@ -107,7 +107,7 @@ function extractInnerVerificationCommand(program: string): { kind: VerificationK
 }
 
 /** Codex `apply_patch` unified format: extract file ops without storing them. */
-function parseApplyPatch(patch: string): {
+function parseApplyPatch(patch: string, fingerprints: boolean): {
   changedFilesCount: number;
   paths: string[];
   pathHash: string | null;
@@ -122,7 +122,7 @@ function parseApplyPatch(patch: string): {
   return {
     changedFilesCount: unique.length,
     paths: unique,
-    pathHash: unique.length > 0 ? pathFingerprintFor(unique) : null,
+    pathHash: unique.length > 0 && fingerprints ? pathFingerprintFor(unique, fingerprints) : null,
     // The whole patch body is the change content: materially different
     // patches hash differently, re-applying the same patch hashes the same.
     fingerprintParts: [patch],
@@ -130,13 +130,15 @@ function parseApplyPatch(patch: string): {
 }
 
 // Secret is per-install and stable; fingerprints across one parse share it.
+// Loaded lazily and ONLY when fingerprints are enabled — replay runs with
+// them disabled and therefore never touches the secret file.
 let cachedSecret: string | null = null;
 function secret(): string {
   cachedSecret ??= loadOrCreateSecret();
   return cachedSecret;
 }
-function pathFingerprintFor(paths: string[]): string {
-  return pathFingerprint(secret(), paths);
+function pathFingerprintFor(paths: string[], enabled: boolean): string | null {
+  return enabled ? pathFingerprint(secret(), paths) : null;
 }
 
 interface PendingOutput {
@@ -146,7 +148,11 @@ interface PendingOutput {
 }
 
 /** Parse one Codex rollout JSONL into sanitized events + token records. */
-export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex'): CodexSession {
+export function parseCodexSessionJsonl(
+  text: string,
+  sessionId8Fallback = 'codex',
+  opts: { fingerprints?: boolean } = {},
+): CodexSession {
   const lines = text.split(/\r?\n/u);
   const events: SanitizedReplayEvent[] = [];
   const tokenRecords: CodexTokenRecord[] = [];
@@ -157,6 +163,7 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
   // Model-turn ordinal: `turn_context` lines are deterministic turn boundaries.
   let turnSeq = 0;
   let turnSeen = false;
+  const fingerprints = opts.fingerprints !== false;
   let sawTimestamp = false;
 
   /** call_id → metadata for pairing outputs back to their events. */
@@ -233,7 +240,7 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
                   }
                 })()
               : '';
-        const parsed = parseApplyPatch(patchText);
+        const parsed = parseApplyPatch(patchText, fingerprints);
         const basis = parsed.fingerprintParts.length > 0 ? ('content' as const) : ('path' as const);
         const testOnly = parsed.paths.length > 0 && parsed.paths.every((pth) => TEST_PATH.test(pth));
         pending.set(callId, { isVerification: false, verificationKind: null, eventIndex: events.length });
@@ -246,7 +253,9 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
           changedFilesCount: parsed.changedFilesCount,
           changeSetHash:
             parsed.fingerprintParts.length > 0
-              ? contentFingerprint(secret(), 'patch', parsed.fingerprintParts)
+              ? fingerprints && secret() !== null
+                ? contentFingerprint(secret(), 'patch', parsed.fingerprintParts)
+                : parsed.pathHash
               : parsed.pathHash,
           fingerprintBasis: parsed.pathHash !== null || parsed.fingerprintParts.length > 0 ? basis : null,
           failureSignatureHash: null,
@@ -290,7 +299,7 @@ export function parseCodexSessionJsonl(text: string, sessionId8Fallback = 'codex
             ok: null,
             verificationKind: null,
             changedFilesCount: allPaths.length,
-            changeSetHash: contentFingerprint(secret(), 'patch', patches.bodies),
+            changeSetHash: fingerprints ? contentFingerprint(secret(), 'patch', patches.bodies) : null,
             fingerprintBasis: pathHash !== null || allPaths.length > 0 ? basis : null,
             failureSignatureHash: null,
             testsFailedCount: null,
