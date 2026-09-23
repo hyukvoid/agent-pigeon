@@ -29,6 +29,9 @@ const EVENTS_FILE =
 
 const IMPLEMENTATION_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
+// Test/spec file paths: editing these is verification preparation (POC-04C.2).
+const TEST_PATH = /(^|\/)(tests?|__tests__|spec)(\/|$)|\.(test|spec)\.[a-z]+$/i;
+
 // MIRROR of src/replay/claude.ts classifyVerificationCommand. The live
 // governor and replay must agree about what counts as evidence; a parity test
 // drives this script and compares it against the TS classifier.
@@ -136,6 +139,9 @@ function changeIdentity(toolName, input, secret) {
   }
   const unique = [...new Set(paths)];
   const pathHash = unique.length > 0 ? pathFingerprint(secret, unique) : null;
+  // Test/spec-only edits are verification preparation (POC-04C.2): they must
+  // not create implementation opportunities for the governor.
+  const testOnly = unique.length > 0 && unique.every((p) => TEST_PATH.test(p));
 
   let op = null;
   let parts = null;
@@ -159,9 +165,9 @@ function changeIdentity(toolName, input, secret) {
   }
 
   if (op !== null && parts !== null) {
-    return { changeFingerprint: contentFingerprint(secret, op, parts), fingerprintBasis: 'content', fileHash: pathHash };
+    return { changeFingerprint: contentFingerprint(secret, op, parts), fingerprintBasis: 'content', fileHash: pathHash, testOnly };
   }
-  return { changeFingerprint: pathHash, fingerprintBasis: pathHash !== null ? 'path' : null, fileHash: pathHash };
+  return { changeFingerprint: pathHash, fingerprintBasis: pathHash !== null ? 'path' : null, fileHash: pathHash, testOnly };
 }
 
 function classifyCommand(command) {
@@ -181,7 +187,7 @@ process.stdin.on('end', () => {
     const input = JSON.parse(raw);
     const toolName = typeof input.tool_name === 'string' ? input.tool_name : 'unknown';
 
-    let change = { changeFingerprint: null, fingerprintBasis: null, fileHash: null };
+    let change = { changeFingerprint: null, fingerprintBasis: null, fileHash: null, testOnly: null };
     if (IMPLEMENTATION_TOOLS.has(toolName)) {
       change = changeIdentity(toolName, input.tool_input ?? {}, loadOrCreateSecret());
     }
@@ -213,6 +219,7 @@ process.stdin.on('end', () => {
       fileHash: change.fileHash,
       changeFingerprint: change.changeFingerprint,
       fingerprintBasis: change.fingerprintBasis,
+      testOnly: change.testOnly,
       verificationKind,
       testsFailedCount,
     };
