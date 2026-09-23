@@ -133,8 +133,10 @@ export function mostTouchedFile(session: SessionAnalysis): MostTouched | null {
 export interface FlightFacts {
   sourceLabel: string;
   sessionId8: string;
+  /** Wall-clock span; resumed sessions include gaps — labeled "Session span". */
   duration: string;
-  reads: number;
+  /** Attributable read count; null when the source cannot attribute reads per file. */
+  reads: number | null;
   edits: number;
   recognizedVerificationRuns: number;
   debuggingLoop: boolean[] | null;
@@ -160,7 +162,11 @@ function durationLabel(ms: number | null): string {
 
 export function flightFacts(session: SessionAnalysis): FlightFacts {
   const attempts = session.attempts;
-  const reads = session.events.filter((e) => e.eventType === 'observation' && e.toolName === 'Read').length;
+  // READ per-file attribution is only possible for sources where reads are
+  // distinct tool calls (Claude Code). Codex reads happen inside exec JS.
+  const reads = session.source === 'claude'
+    ? session.events.filter((e) => e.eventType === 'observation' && e.toolName === 'Read').length
+    : null;
   return {
     sourceLabel: session.source === 'codex' ? 'Codex' : 'Claude Code',
     sessionId8: session.sessionId8,
@@ -194,8 +200,9 @@ function lastEventOffset(s: SessionAnalysis): number {
   return max;
 }
 
-function bar(label: string, value: number, max: number): string {
+function bar(label: string, value: number | null, max: number): string {
   const width = 18;
+  if (value === null) return `  ${label.padEnd(10, ' ')}${'—'.padEnd(width, ' ')}  N/A`;
   const filled = value === 0 ? '' : '█'.repeat(Math.max(1, Math.round((value / max) * width)));
   return `  ${label.padEnd(10, ' ')}${filled.padEnd(width, ' ')}  ${value}`;
 }
@@ -203,9 +210,9 @@ function bar(label: string, value: number, max: number): string {
 export function renderFlight(facts: FlightFacts): string {
   const lines: string[] = [];
   lines.push(`🐦 Agent Pigeon — ${facts.sourceLabel}`);
-  lines.push(`  ${facts.duration} · 1 session`);
+  lines.push(`  Session span: ${facts.duration} · 1 session`);
   lines.push('');
-  const max = Math.max(facts.reads, facts.edits, facts.recognizedVerificationRuns, 1);
+  const max = Math.max(facts.edits, facts.recognizedVerificationRuns, 1);
   lines.push(bar('READ', facts.reads, max));
   lines.push(bar('EDIT', facts.edits, max));
   lines.push(bar('VERIFY', facts.recognizedVerificationRuns, max));

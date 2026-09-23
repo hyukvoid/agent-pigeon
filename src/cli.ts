@@ -18,6 +18,7 @@ import { performance } from 'node:perf_hooks';
 import { discoverSessions, analyzeFile, scanSessions } from './replay/corpus.js';
 import type { SessionAnalysis } from './replay/corpus.js';
 import { flightFacts, renderFlight, codingSessions, parseFlightArgs } from './flight.js';
+import { buildCompare } from './compare.js';
 
 function humanCount(n: number): string {
   return n.toLocaleString('en-US');
@@ -29,6 +30,7 @@ function printHelp(): void {
 Usage:
   agent-pigeon flight [options]     Flight report for the most recent
                                     coding session (read-only)
+  agent-pigeon compare <A> <B>      Side-by-side comparison of two sessions
   agent-pigeon replay [options]     Analyze all local agent history
   agent-pigeon --help               Show this help
   agent-pigeon --version            Show version
@@ -231,6 +233,48 @@ function runFlight(args: import('./flight.js').FlightArgs): void {
   }
 }
 
+function runCompare(idA: string | null, idB: string | null): void {
+  if (idA === null || idB === null) {
+    process.stderr.write('usage: agent-pigeon compare <sessionA-id> <sessionB-id>\n');
+    process.exitCode = 1;
+    return;
+  }
+
+  const discovered = discoverSessions();
+  const { sessions } = scanSessions(discovered.files);
+  const coding = codingSessions(sessions);
+
+  const resolve = (prefix: string) => coding.find((s) => s.sessionId8.startsWith(prefix));
+  const sa = resolve(idA);
+  const sb = resolve(idB);
+  if (sa === undefined || sb === undefined) {
+    process.stderr.write(`session not found: ${sa === undefined ? idA : idB}
+`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const fa = flightFacts(sa);
+  const fb = flightFacts(sb);
+  const result = buildCompare(fa, fb);
+
+  const label = (s: string) => s.padEnd(24, ' ');
+  const lines: string[] = [];
+  lines.push(`Agent Pigeon — compare`);
+  lines.push('');
+  lines.push(`  ${label('')}  ${fa.sourceLabel} ${sa.sessionId8}   vs   ${fb.sourceLabel} ${sb.sessionId8}`);
+  lines.push('');
+  for (const row of result.rows) {
+    lines.push(`  ${label(row.metric)}  ${row.a}   /   ${row.b}`);
+  }
+  lines.push('');
+  for (const s of result.summaries) {
+    lines.push(`  · ${s}`);
+  }
+  lines.push('  Read-only · nothing stored or uploaded');
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
   const command = argv[0];
@@ -249,6 +293,11 @@ function main(): void {
   }
   if (command === 'flight') {
     runFlight(parseFlightArgs(argv.slice(1)));
+    return;
+  }
+  if (command === 'compare') {
+    const ids = argv.slice(1);
+    runCompare(ids[0] ?? null, ids[1] ?? null);
     return;
   }
   throw new Error(`unknown command: ${command} (try 'agent-pigeon --help')`);

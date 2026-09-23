@@ -32,6 +32,24 @@ The cheapest question you can ask about an agent session is:
 Agent Pigeon answers it from your existing session history — no configuration,
 no API keys, no cloud.
 
+## Compare two sessions
+
+```bash
+$ agent-pigeon compare <sessionA> <sessionB>
+
+                        Claude Code 415efbff   vs   Codex 019f2132
+
+  Session span              8 min   /   63 min
+  EDIT                      11   /   40
+  Recognized verification   0   /   14
+  READ (attributed)         8   /   N/A
+
+  · Codex ran more recognized verification (14 vs 0).
+  Read-only · nothing stored or uploaded
+```
+
+Factual side-by-side counts — no scores, no winner, no AI judgment.
+
 ## Install & run
 
 Requires Node ≥ 20.11.
