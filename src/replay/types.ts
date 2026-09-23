@@ -48,6 +48,12 @@ export interface SanitizedReplayEvent {
   turn?: number | null;
   /** Implementation events that only touch test/spec files (verification preparation). */
   testOnly?: boolean | null;
+  /**
+   * Display-safe path used by report features (flight): repo-relative or the
+   * last path segments — never an absolute home-directory path. Null for
+   * non-file events.
+   */
+  path?: string | null;
 }
 
 export interface ReplayAttempt {

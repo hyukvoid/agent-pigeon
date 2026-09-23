@@ -2,6 +2,7 @@
 /**
  * Agent Pigeon — public CLI (v0.1, replay-only).
  *
+ *   agent-pigeon flight     One-session "flight report" (read-only)
  *   agent-pigeon replay     Analyze local coding-agent history (read-only)
  *   agent-pigeon --help
  *   agent-pigeon --version
@@ -16,6 +17,7 @@ import { performance } from 'node:perf_hooks';
 
 import { discoverSessions, analyzeFile, scanSessions } from './replay/corpus.js';
 import type { SessionAnalysis } from './replay/corpus.js';
+import { flightFacts, renderFlight, codingSessions, parseFlightArgs } from './flight.js';
 
 function humanCount(n: number): string {
   return n.toLocaleString('en-US');
@@ -25,9 +27,17 @@ function printHelp(): void {
   process.stdout.write(`Agent Pigeon — proof-of-progress for coding agents
 
 Usage:
-  agent-pigeon replay [options]     Analyze local agent history (read-only)
+  agent-pigeon flight [options]     Flight report for the most recent
+                                    coding session (read-only)
+  agent-pigeon replay [options]     Analyze all local agent history
   agent-pigeon --help               Show this help
   agent-pigeon --version            Show version
+
+Flight options:
+  --session <id-prefix>             Report a specific session
+  --json                            Machine-readable output
+  --claude-dir <path>               Override Claude history directory
+  --codex-dir <path>                Override Codex history directory
 
 Replay options:
   --source <claude|codex|all>       Which history to analyze (default: all)
@@ -185,6 +195,42 @@ function runReplay(args: ReplayArgs): void {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
+function runFlight(args: import('./flight.js').FlightArgs): void {
+  const discovered = discoverSessions({ claudeDir: args.claudeDir, codexDir: args.codexDir });
+  const { sessions, unreadable } = scanSessions(discovered.files);
+  void unreadable;
+  const candidates = codingSessions(sessions);
+  const selected =
+    args.session !== undefined
+      ? candidates.filter((s) => s.sessionId8.startsWith(args.session as string))
+      : candidates;
+
+  if (selected.length === 0) {
+    const message =
+      args.session !== undefined
+        ? `no coding session matching "${args.session}" found in local history`
+        : 'no coding sessions with implementation activity found in local history';
+    process.stdout.write(message + '\n');
+    return;
+  }
+
+  const session = selected[0];
+  if (session === undefined) return;
+  const facts = flightFacts(session);
+
+  if (args.json) {
+    const { sourceLabel: _sourceLabel, ...rest } = facts;
+    void _sourceLabel;
+    process.stdout.write(`${JSON.stringify({ source: session.source, ...rest }, null, 2)}\n`);
+    return;
+  }
+
+  process.stdout.write(renderFlight(facts) + '\n');
+  if (selected.length > 1) {
+    process.stderr.write(`${selected.length - 1} more coding session(s) available — pick one with --session <id-prefix>\n`);
+  }
+}
+
 function main(): void {
   const argv = process.argv.slice(2);
   const command = argv[0];
@@ -199,6 +245,10 @@ function main(): void {
   }
   if (command === 'replay') {
     runReplay(parseReplayArgs(argv.slice(1)));
+    return;
+  }
+  if (command === 'flight') {
+    runFlight(parseFlightArgs(argv.slice(1)));
     return;
   }
   throw new Error(`unknown command: ${command} (try 'agent-pigeon --help')`);

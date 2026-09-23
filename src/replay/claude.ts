@@ -18,6 +18,7 @@ export interface ReplaySessionMeta {
   sessionId8: string;
   lineCount: number;
   parsedLineCount: number;
+  lastEventMs: number | null;
   /** ISO timestamp of the first timestamped line. Not persisted in reports. */
   startedAtIso: string | null;
 }
@@ -31,6 +32,7 @@ export interface ClaudeSessionLine {
   type?: string;
   timestamp?: string;
   sessionId?: string;
+  cwd?: string;
   isSidechain?: boolean;
   message?: {
     content?: Array<{
@@ -57,6 +59,26 @@ function sha8(text: string): string {
 
 /** Test/spec file paths (POC-04C.2): editing these is verification preparation, not a new implementation attempt. */
 const TEST_PATH = /(^|\/)(tests?|__tests__|spec)(\/|$)|\.(test|spec)\.[a-z]+$/i;
+
+/**
+ * Display-safe path for reports (POC flight): strip drive letters, make the
+ * path repo-relative when the session cwd is known, otherwise keep at most
+ * the last 4 segments so home-directory names never surface. Forward slashes.
+ */
+function displayPath(raw: string, cwd: string | null): string {
+  let p = raw.replace(/[\\]+/gu, '/');
+  const drive = /^[A-Za-z]:\//u;
+  if (drive.test(p)) p = p.slice(2);
+  if (cwd !== null && cwd.length > 0) {
+    const c = cwd.replace(/[\\]+/gu, '/').replace(drive, '').replace(/\/+$/u, '');
+    if (c.length > 0 && p.toLowerCase().startsWith(c.toLowerCase() + '/')) {
+      p = p.slice(c.length + 1);
+    }
+  }
+  const segments = p.split('/').filter((seg) => seg.length > 0);
+  if (segments.length > 4) return '…/' + segments.slice(-4).join('/');
+  return segments.join('/');
+}
 
 /**
  * Package-manager script indirection. Most repositories do not run `tsc` or
@@ -253,11 +275,13 @@ export function parseClaudeSessionJsonl(
     sessionId8: sessionId8Fallback,
     lineCount: lines.length,
     parsedLineCount: 0,
+    lastEventMs: null,
     startedAtIso: null,
   };
   const events: SanitizedReplayEvent[] = [];
 
   let epochMs: number | null = null;
+  let cwd: string | null = null;
   // Model-turn ordinal: each assistant message is one turn/batch (POC-04C.2).
   let turnSeq = 0;
   // Per-install HMAC key for change/path fingerprints. Only loaded when
@@ -283,6 +307,7 @@ export function parseClaudeSessionJsonl(
     if (obj.sessionId !== undefined) {
       meta.sessionId8 = obj.sessionId.slice(0, 8);
     }
+    if (typeof obj.cwd === 'string' && obj.cwd.length > 0) cwd = obj.cwd;
     if (obj.type !== 'assistant' && obj.type !== 'user') continue;
     meta.parsedLineCount++;
 
@@ -295,6 +320,7 @@ export function parseClaudeSessionJsonl(
           meta.startedAtIso = obj.timestamp;
         }
         offset = ms - epochMs;
+          if (meta.lastEventMs === null || ms > meta.lastEventMs) meta.lastEventMs = ms;
       }
     }
 
@@ -332,6 +358,9 @@ export function parseClaudeSessionJsonl(
             durationMs: null,
             turn: messageTurn,
             testOnly,
+            path: typeof (block.input as { file_path?: unknown }).file_path === 'string'
+              ? displayPath((block.input as { file_path: string }).file_path, cwd)
+              : null,
           });
         } else if (toolName === 'Bash') {
           const command = typeof (block.input as { command?: unknown } | undefined)?.command === 'string'
@@ -370,6 +399,7 @@ export function parseClaudeSessionJsonl(
             });
           }
         } else {
+          const filePath = (block.input as { file_path?: unknown } | undefined)?.file_path;
           events.push({
             eventType: 'observation',
             timestampOffset: offset,
@@ -382,6 +412,9 @@ export function parseClaudeSessionJsonl(
             failureSignatureHash: null,
             testsFailedCount: null,
             durationMs: null,
+            path: typeof filePath === 'string' && filePath.length > 0
+              ? displayPath(filePath, cwd)
+              : null,
           });
         }
       }

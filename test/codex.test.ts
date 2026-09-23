@@ -52,14 +52,18 @@ describe('Codex offline adapter (synthetic rollout)', () => {
     assert.equal(session.mobileSignal, true, 'adb devices → mobile signal');
   });
 
-  it('privacy: no patch content or paths in serialized events', () => {
+  it('privacy: no patch content, no absolute paths in serialized events', () => {
     const serialized = JSON.stringify(session.events);
-    assert.ok(!serialized.includes('LoginViewModel'));
+    // patch bodies never persist
     assert.ok(!serialized.includes('session?.token'));
-    assert.ok(!serialized.includes('src/SessionStore'));
     assert.ok(!serialized.includes('Token.create'));
     assert.ok(!serialized.includes('npm test'));
     assert.ok(!serialized.includes('adb devices'));
+    // repo-relative display paths are allowed (POC flight shows them);
+    // absolute machine paths are not.
+    assert.ok(!serialized.includes('/Users/'));
+    assert.ok(!serialized.includes('C:/'));
+    assert.doesNotMatch(serialized, /"path":"[^"]*\/[^"]*\/[^"]*\/[^"]*\/[^"]*"/u);
   });
 
   it('token window deltas reconstruct from cumulative records', () => {

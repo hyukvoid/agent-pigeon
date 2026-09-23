@@ -21,6 +21,8 @@ export interface SessionAnalysis {
   attempts: ReplayAttempt[];
   findings: ReplayFinding[];
   mobile: boolean;
+  /** Absolute ms of the last timestamped line (wall-clock session end). */
+  lastEventMs: number | null;
   implementationCalls: number;
   verificationRuns: number;
   epochMs?: number | null;
@@ -45,6 +47,7 @@ export function analyzeEvents(
   extra: {
     mobile: boolean;
     epochMs?: number | null;
+    lastEventMs?: number | null;
     tokenRecords?: { timestampMs: number; totalTokens: number }[];
   } = { mobile: false },
 ): SessionAnalysis {
@@ -57,6 +60,7 @@ export function analyzeEvents(
     attempts,
     findings: analysis.findings,
     mobile: extra.mobile,
+    lastEventMs: extra.lastEventMs ?? null,
     implementationCalls: events.filter((e) => e.eventType === 'implementation').length,
     verificationRuns: events.filter((e) => e.eventType === 'verification').length,
     epochMs: extra.epochMs ?? null,
@@ -77,6 +81,7 @@ export function analyzeCodexFile(file: string, opts: AnalyzeOptions = {}): Sessi
   return analyzeEvents('codex', session.sessionId8, session.events, {
     mobile: session.mobileSignal,
     epochMs: session.epochMs,
+    lastEventMs: session.lastEventMs,
     tokenRecords: session.tokenRecords,
   });
 }
@@ -84,7 +89,10 @@ export function analyzeCodexFile(file: string, opts: AnalyzeOptions = {}): Sessi
 export function analyzeClaudeFile(file: string, opts: AnalyzeOptions = {}): SessionAnalysis {
   const text = readFileSync(file, 'utf8');
   const { meta, events } = parseClaudeSessionJsonl(text, 'session', opts);
-  return analyzeEvents('claude', meta.sessionId8, events);
+  return analyzeEvents('claude', meta.sessionId8, events, {
+    mobile: false,
+    lastEventMs: meta.lastEventMs,
+  });
 }
 
 

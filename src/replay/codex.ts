@@ -34,6 +34,8 @@ export interface CodexSession {
   cwd: string | null;
   /** Epoch of event offsets (first timestamped line), null if untimed. */
   epochMs: number | null;
+  /** Absolute ms of the last timestamped line (wall-clock session end). */
+  lastEventMs: number | null;
   /** True when any command matched a mobile/Android signal (in-memory only). */
   mobileSignal: boolean;
   /** True when the session carried turn boundaries (turn_context lines). */
@@ -163,6 +165,7 @@ export function parseCodexSessionJsonl(
   // Model-turn ordinal: `turn_context` lines are deterministic turn boundaries.
   let turnSeq = 0;
   let turnSeen = false;
+  let lastEventMs: number | null = null;
   const fingerprints = opts.fingerprints !== false;
   let sawTimestamp = false;
 
@@ -206,6 +209,7 @@ export function parseCodexSessionJsonl(
         sawTimestamp = true;
         if (epochMs === null) epochMs = ms;
         offset = ms - epochMs;
+        if (lastEventMs === null || ms > lastEventMs) lastEventMs = ms;
       }
     }
 
@@ -243,6 +247,7 @@ export function parseCodexSessionJsonl(
         const parsed = parseApplyPatch(patchText, fingerprints);
         const basis = parsed.fingerprintParts.length > 0 ? ('content' as const) : ('path' as const);
         const testOnly = parsed.paths.length > 0 && parsed.paths.every((pth) => TEST_PATH.test(pth));
+        const display = parsed.paths.length > 0 ? parsed.paths[0] : null;
         pending.set(callId, { isVerification: false, verificationKind: null, eventIndex: events.length });
         pushEvent({
           eventType: 'implementation',
@@ -263,6 +268,7 @@ export function parseCodexSessionJsonl(
           durationMs: null,
           turn: turnSeen ? turnSeq : null,
           testOnly,
+          path: display,
         });
       } else if (p.name === 'exec' || p.name === 'shell_command') {
         // Outer `exec` input is a JS PROGRAM that drives inner tools
@@ -291,6 +297,7 @@ export function parseCodexSessionJsonl(
           const pathHash = allPaths.length > 0 ? pathFingerprint(secret(), allPaths) : null;
           const basis = 'content' as const;
           const testOnly = allPaths.length > 0 && allPaths.every((pth) => TEST_PATH.test(pth));
+          const display = allPaths.length > 0 ? allPaths[0] : null;
           pending.set(callId, { isVerification: false, verificationKind: null, eventIndex: events.length });
           pushEvent({
             eventType: 'implementation',
@@ -306,6 +313,7 @@ export function parseCodexSessionJsonl(
             durationMs: null,
             turn: turnSeen ? turnSeq : null,
             testOnly,
+            path: display,
           });
         }
 
@@ -408,6 +416,7 @@ export function parseCodexSessionJsonl(
     sessionId8,
     cwd,
     epochMs,
+    lastEventMs,
     mobileSignal,
     turnAware: turnSeen,
     events,
