@@ -42,7 +42,9 @@ no configuration, no API keys, no cloud.
 
 ## Install & run
 
-Requires Node ≥ 20.11. Windows / Linux / macOS (see Support matrix).
+Requires Node ≥ 20.11.
+Validated on **Windows 11** and **Linux (Debian 12, Node 20, Docker, offline)**.
+macOS is untested.
 
 ```bash
 git clone https://github.com/hyukvoid/agent-pigeon && cd agent-pigeon
