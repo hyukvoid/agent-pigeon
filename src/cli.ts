@@ -299,7 +299,28 @@ function main(): void {
     return;
   }
   if (command === 'share') {
-    process.stdout.write('share: experimental — use flight/compare terminal output\n');
+    const sub = argv[1];
+    const analyzed: SessionAnalysis[] = [];
+    for (const f of discoverSessions().files) {
+      try { analyzed.push(analyzeFile(f.path, f.source)); } catch { /* skip */ }
+    }
+    const coding = codingSessions(analyzed);
+    if (sub === 'flight') {
+      const target = coding[0];
+      if (target === undefined) { process.stdout.write('no sessions\n'); return; }
+      process.stdout.write(renderFlightSvg(flightFacts(target)));
+      return;
+    }
+    if (sub === 'compare') {
+      if (coding.length < 2) { process.stdout.write('need 2 sessions\n'); return; }
+      const fa = coding[0];
+      const fb = coding[1];
+      if (fa === undefined || fb === undefined) { process.stdout.write('need 2 sessions\n'); return; }
+      process.stdout.write(renderCompareSvg(flightFacts(fa), flightFacts(fb)));
+      return;
+    }
+    process.stderr.write('share: expected flight or compare\n');
+    process.exitCode = 1;
     return;
   }
   throw new Error(`unknown command: ${command} (try 'agent-pigeon --help')`);
