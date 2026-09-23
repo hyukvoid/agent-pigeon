@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Agent Pigeon — public CLI (v0.1, replay-only).
+ * Agent Pigeon — public CLI (v0.1: flight / compare / replay / share).
  *
  *   agent-pigeon flight     One-session "flight report" (read-only)
+ *   agent-pigeon compare    Side-by-side comparison of two sessions
  *   agent-pigeon replay     Analyze local coding-agent history (read-only)
+ *   agent-pigeon share      SVG card of a flight/compare report (stdout)
  *   agent-pigeon --help
  *   agent-pigeon --version
  *
@@ -33,6 +35,8 @@ Usage:
                                     coding session (read-only)
   agent-pigeon compare <A> <B>      Side-by-side comparison of two sessions
   agent-pigeon replay [options]     Analyze all local agent history
+  agent-pigeon share flight         SVG card for a session, printed to stdout
+  agent-pigeon share compare        SVG card comparing two sessions, to stdout
   agent-pigeon --help               Show this help
   agent-pigeon --version            Show version
 
@@ -50,6 +54,7 @@ Replay options:
 
 Replay reads your local session history, computes counts in memory, and
 prints a report. It creates nothing, stores nothing, and sends nothing.
+Share prints an SVG card of the same facts — also local-only.
 `);
 }
 

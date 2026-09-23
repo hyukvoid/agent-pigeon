@@ -32,16 +32,34 @@ function syntheticClaudeDir(): { dir: string; file: string } {
   return { dir: home, file };
 }
 
-describe('agent-pigeon CLI (replay-only v0.1)', () => {
-  it('help documents replay only — no experimental live commands', () => {
+describe('agent-pigeon CLI (public v0.1)', () => {
+  it('help documents the full public surface — no experimental live commands', () => {
     const { stdout } = runCli(['help']);
     assert.match(stdout, /replay/u);
+    assert.match(stdout, /flight/u);
+    assert.match(stdout, /compare/u);
+    assert.match(stdout, /share/u);
     assert.doesNotMatch(stdout, /init|remove|governor|VERIFY_FIRST/u);
   });
 
   it('unknown/experimental commands are rejected', () => {
     for (const cmd of ['init', 'remove', 'governor', 'nonsense']) {
       assert.equal(runCli([cmd]).status, 1, `${cmd} must not be a public command`);
+    }
+  });
+
+  it('share prints a self-contained SVG card to stdout', () => {
+    // share has no directory overrides; on an empty machine it reports
+    // no sessions, otherwise it emits an <svg> document. Never writes files.
+    const { stdout } = runCli(['share', 'flight']);
+    assert.ok(
+      stdout.startsWith('<svg') || stdout.trim() === 'no sessions',
+      `unexpected share output: ${stdout.slice(0, 80)}`,
+    );
+    if (stdout.startsWith('<svg')) {
+      assert.match(stdout, /<\/svg>$/u);
+      // self-contained: no external references beyond the SVG namespace
+      assert.doesNotMatch(stdout, /xlink:href|<image|@import|url\(/u);
     }
   });
 

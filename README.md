@@ -50,6 +50,17 @@ $ agent-pigeon compare <sessionA> <sessionB>
 
 Factual side-by-side counts — no scores, no winner, no AI judgment.
 
+## Share a card
+
+```bash
+$ agent-pigeon share flight > flight.svg
+$ agent-pigeon share compare > compare.svg
+```
+
+Prints a self-contained SVG card of the same report to stdout. Deterministic,
+local, no network, no external fonts — the file contains only aggregate
+counts, short session IDs, and display-safe file names.
+
 ## Install & run
 
 Requires Node ≥ 20.11.
@@ -61,6 +72,8 @@ git clone https://github.com/hyukvoid/agent-pigeon && cd agent-pigeon
 npm install                       # builds automatically
 npx agent-pigeon flight           # flight report for your most recent session
 npx agent-pigeon replay           # …or the full multi-session verification report
+npx agent-pigeon compare <A> <B>  # side-by-side counts for two sessions
+npx agent-pigeon share flight     # SVG card of the report, on stdout
 ```
 
 Options: `--session <id-prefix>` (pick a session) · `--source claude|codex|all` ·
@@ -99,9 +112,10 @@ not read.
 ## Privacy
 
 - **Reads:** only the history directories above, read-only.
-- **Persists:** nothing. Flight and replay write no files, create no state,
-  keep no cache.
-- **Transmits:** nothing. There is no network code in either path.
+- **Persists:** nothing. Flight, replay, compare, and share write no files,
+  create no state, keep no cache (redirect `share` output yourself if you
+  want to keep a card).
+- **Transmits:** nothing. There is no network code in any command.
 - **Output:** aggregate counts and short session identifiers. No source
   code, no diffs, no commands, no prompts.
 

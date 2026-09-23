@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.1.0 — replay-only release candidate
+## 0.1.0 — local-analysis release candidate
 
-Initial public-surface scope: **`agent-pigeon replay`** only.
+Initial public-surface scope: **`agent-pigeon replay`**, plus `flight`,
+`compare`, and `share` (SVG card on stdout).
 
 - Parses local Claude Code (`~/.claude/projects`) and Codex
   (`~/.codex/sessions`) history, read-only. Replay creates no files and

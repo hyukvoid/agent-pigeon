@@ -1,11 +1,12 @@
 /**
  * Agent Pigeon — `share` (v0.1 MVP): deterministic SVG generation.
  *
- *   agent-pigeon share flight [session] [--output <path>]
- *   agent-pigeon share compare <A> <B> [--output <path>]
+ *   agent-pigeon share flight
+ *   agent-pigeon share compare
  *
- * Produces privacy-safe SVG cards from the same FlightFacts used by flight
- * and replay. Deterministic: the same session always produces the same SVG.
+ * Prints privacy-safe SVG cards to stdout (redirect to a file to keep one)
+ * from the same FlightFacts used by flight and replay. Deterministic: the
+ * same sessions always produce the same SVG.
  * No network fonts, no screenshots, no browser — just string building.
  *
  * Privacy: SVG output contains only aggregate counts, short session IDs, and
