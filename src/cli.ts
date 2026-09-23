@@ -19,6 +19,7 @@ import { discoverSessions, analyzeFile, scanSessions } from './replay/corpus.js'
 import type { SessionAnalysis } from './replay/corpus.js';
 import { flightFacts, renderFlight, codingSessions, parseFlightArgs } from './flight.js';
 import { buildCompare } from './compare.js';
+import { renderFlightSvg, renderCompareSvg } from './share.js';
 
 function humanCount(n: number): string {
   return n.toLocaleString('en-US');
@@ -81,8 +82,6 @@ function parseReplayArgs(argv: string[]): ReplayArgs {
   return args;
 }
 
-/** Distinct non-test implementation turns; falls back to attempts for
- * turn-unaware sources. */
 function implementationTurnCount(sessions: SessionAnalysis[]): number {
   const direct = new Set<string>();
   let turnAware = false;
@@ -111,7 +110,7 @@ function runReplay(args: ReplayArgs): void {
     try {
       sessions.push(analyzeFile(entry.path, entry.source, { fingerprints: false }));
     } catch {
-      unreadable++; // a corrupt history file must never fail the whole replay
+      unreadable++;
     }
     done++;
     if (!args.json && done % 50 === 0) {
@@ -142,7 +141,7 @@ function runReplay(args: ReplayArgs): void {
 
   if (args.json) {
     process.stdout.write(
-      `${JSON.stringify(
+      JSON.stringify(
         {
           scanned: {
             total: sessions.length + unreadable,
@@ -163,7 +162,7 @@ function runReplay(args: ReplayArgs): void {
         },
         null,
         2,
-      )}\n`,
+      ) + '\n',
     );
     return;
   }
@@ -221,9 +220,9 @@ function runFlight(args: import('./flight.js').FlightArgs): void {
   const facts = flightFacts(session);
 
   if (args.json) {
-    const { sourceLabel: _sourceLabel, ...rest } = facts;
-    void _sourceLabel;
-    process.stdout.write(`${JSON.stringify({ source: session.source, ...rest }, null, 2)}\n`);
+    const { sourceLabel: _sl, ...rest } = facts;
+    void _sl;
+    process.stdout.write(JSON.stringify({ source: session.source, ...rest }, null, 2) + '\n');
     return;
   }
 
@@ -248,8 +247,7 @@ function runCompare(idA: string | null, idB: string | null): void {
   const sa = resolve(idA);
   const sb = resolve(idB);
   if (sa === undefined || sb === undefined) {
-    process.stderr.write(`session not found: ${sa === undefined ? idA : idB}
-`);
+    process.stderr.write(`session not found: ${sa === undefined ? idA : idB}\n`);
     process.exitCode = 1;
     return;
   }
@@ -260,7 +258,7 @@ function runCompare(idA: string | null, idB: string | null): void {
 
   const label = (s: string) => s.padEnd(24, ' ');
   const lines: string[] = [];
-  lines.push(`Agent Pigeon — compare`);
+  lines.push('Agent Pigeon — compare');
   lines.push('');
   lines.push(`  ${label('')}  ${fa.sourceLabel} ${sa.sessionId8}   vs   ${fb.sourceLabel} ${sb.sessionId8}`);
   lines.push('');
@@ -298,6 +296,10 @@ function main(): void {
   if (command === 'compare') {
     const ids = argv.slice(1);
     runCompare(ids[0] ?? null, ids[1] ?? null);
+    return;
+  }
+  if (command === 'share') {
+    process.stdout.write('share: experimental — use flight/compare terminal output\n');
     return;
   }
   throw new Error(`unknown command: ${command} (try 'agent-pigeon --help')`);

@@ -157,7 +157,9 @@ function durationLabel(ms: number | null): string {
   if (minutes < 1) return `${Math.round(ms / 1000)} s`;
   if (minutes < 90) return `${Math.round(minutes)} min`;
   const hours = Math.floor(minutes / 60);
-  return `${hours} h ${Math.round(minutes - hours * 60)} min`;
+  if (hours < 48) return `${hours} h ${Math.round(minutes - hours * 60)} min`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24} h*`;
 }
 
 export function flightFacts(session: SessionAnalysis): FlightFacts {
