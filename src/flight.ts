@@ -14,6 +14,16 @@
 import type { SessionAnalysis } from './replay/corpus.js';
 import type { ReplayAttempt } from './replay/types.js';
 
+export const DOT_PIGEON = [
+  '⠀⠀⠀⠀⠀⠀⢀⣤⣴⣤⣄⠀⠀⠀',
+  '⠀⠀⠀⠀⠀⠀⣼⣿⣿⣽⣿⣄⠀⠀',
+  '⠀⠀⠀⠀⣠⣤⣿⣿⣿⣿⡿⠛⠉⠁',
+  '⣀⣀⣴⣿⡿⣿⣿⣿⣿⣿⣿⣷⠀⠀',
+  '⠈⠻⣿⡟⠛⣦⣉⠛⢿⣿⣿⣿⠁⠀',
+  '⠀⠀⠀⠉⠻⡿⠿⡿⠶⡿⠋⠁⠀⠀',
+  '⠀⠀⠀⠀⠒⠓⠂⠀⠒⠓⠂⠀⠀⠀',
+].join('\n');
+
 export interface FlightArgs {
   json: boolean;
   session?: string;
@@ -211,7 +221,7 @@ function bar(label: string, value: number | null, max: number): string {
 
 export function renderFlight(facts: FlightFacts): string {
   const lines: string[] = [];
-  lines.push(`🐦 Agent Pigeon — ${facts.sourceLabel}`);
+  lines.push(`Agent Pigeon — ${facts.sourceLabel}`);
   lines.push(`  Session span: ${facts.duration} · 1 session`);
   lines.push('');
   const max = Math.max(facts.edits, facts.recognizedVerificationRuns, 1);

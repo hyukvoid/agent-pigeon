@@ -1,6 +1,6 @@
 {
   "name": "agent-pigeon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "See how your coding agent actually worked. Local, read-only CLI that turns Claude Code / Codex sessions into flight reports: edits, recognized verification runs, FAIL-to-PASS loops, and session comparisons.",
   "keywords": [
     "claude-code",

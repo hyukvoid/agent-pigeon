@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 — branding polish
+
+- Added the Agent Pigeon pixel-art mascot, compact terminal dot pigeon, and refreshed README.
+- No analysis or privacy behavior changes.
+
 ## 0.1.0 — local-analysis release candidate
 
 Initial public-surface scope: **`agent-pigeon replay`**, plus `flight`,

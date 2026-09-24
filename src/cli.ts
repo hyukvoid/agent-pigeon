@@ -19,7 +19,7 @@ import { performance } from 'node:perf_hooks';
 
 import { discoverSessions, analyzeFile, scanSessions } from './replay/corpus.js';
 import type { SessionAnalysis } from './replay/corpus.js';
-import { flightFacts, renderFlight, codingSessions, parseFlightArgs } from './flight.js';
+import { DOT_PIGEON, flightFacts, renderFlight, codingSessions, parseFlightArgs } from './flight.js';
 import { buildCompare } from './compare.js';
 import { renderFlightSvg, renderCompareSvg } from './share.js';
 
@@ -28,7 +28,8 @@ function humanCount(n: number): string {
 }
 
 function printHelp(): void {
-  process.stdout.write(`Agent Pigeon — proof-of-progress for coding agents
+  const mascot = process.stdout.isTTY ? `${DOT_PIGEON}\n` : '';
+  process.stdout.write(`${mascot}Agent Pigeon — proof-of-progress for coding agents
 
 Usage:
   agent-pigeon flight [options]     Flight report for the most recent
@@ -231,6 +232,7 @@ function runFlight(args: import('./flight.js').FlightArgs): void {
     return;
   }
 
+  if (process.stdout.isTTY) process.stdout.write(`${DOT_PIGEON}\n`);
   process.stdout.write(renderFlight(facts) + '\n');
   if (selected.length > 1) {
     process.stderr.write(`${selected.length - 1} more coding session(s) available — pick one with --session <id-prefix>\n`);
