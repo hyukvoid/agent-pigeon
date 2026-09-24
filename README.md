@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/hyukvoid/agent-pigeon/main/docs/branding/pigeon-badge.png" width="80" alt="Agent Pigeon pixel-art mascot">
-</p>
-
 # Agent Pigeon
 
 See how your coding agent actually worked.
