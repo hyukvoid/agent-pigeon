@@ -11,7 +11,7 @@ import type { AttemptEvidence } from '../src/core/types.js';
 import { validateAttemptEvidence } from '../src/core/types.js';
 import { repoRoot, fixturesRoot } from './paths.js';
 
-const HOOK = join(repoRoot, 'hooks', 'hook-posttooluse.mjs');
+const HOOK = join(repoRoot, 'experimental', 'hooks', 'hook-posttooluse.mjs');
 const POC035 = join(repoRoot, 'dist', 'src', 'poc035.js');
 
 describe('changeFingerprint (HMAC-SHA256 128-bit, per-install secret)', () => {

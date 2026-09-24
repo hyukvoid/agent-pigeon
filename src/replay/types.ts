@@ -38,6 +38,22 @@ export interface SanitizedReplayEvent {
   /** Extracted failed-test count; null when unknown. Numbers only — never text. */
   testsFailedCount: number | null;
   durationMs: number | null;
+  /**
+   * Model-turn ordinal within the session (POC-04C.2): consecutive
+   * implementation events in the SAME turn are one logical change, not N
+   * attempts. Deterministic — message boundary (Claude) or turn boundary
+   * (Codex) — never a time threshold. Null when the source has no turn
+   * boundaries.
+   */
+  turn?: number | null;
+  /** Implementation events that only touch test/spec files (verification preparation). */
+  testOnly?: boolean | null;
+  /**
+   * Display-safe path used by report features (flight): repo-relative or the
+   * last path segments — never an absolute home-directory path. Null for
+   * non-file events.
+   */
+  path?: string | null;
 }
 
 export interface ReplayAttempt {
@@ -49,5 +65,13 @@ export interface ReplayAttempt {
   verificationKinds: VerificationKind[];
   /** Implementation calls inside this attempt window. */
   implementationEvents: number;
+  /** Breakdown by tool family (POC-04C.2 scaffolding carve-out). */
+  implWrites: number;
+  implEdits: number;
+  /**
+   * Distinct non-test-only model turns that produced this attempt's changes
+   * (POC-04C.2). Empty when the source has no turn boundaries.
+   */
+  implTurns: number[];
   timestampOffset: number | null;
 }

@@ -1,61 +1,121 @@
 #!/usr/bin/env node
 /**
- * Agent Pigeon — Claude Code PostToolUse hook (POC-03/04 hot path).
+ * Agent Pigeon — Claude Code PostToolUse hook (POC-03/04 async observer).
  *
  * Contract: read one hook JSON from stdin, append ONE sanitized JSONL event,
  * exit 0 immediately. Never blocks, never fails, never talks to the network,
  * never invokes Jev, never reads transcripts or git. All heavy work happens
- * in the offline worker (poc:03 / governor processor), not here.
+ * in the offline worker (poc:03 / governor batch hook), not here.
  *
- * Stored fields (normalized metadata only — spec §5):
+ * Stored fields (normalized metadata only):
  *   ts, sessionId (8 chars), toolName, ok (tool success if determinable),
  *   changeFingerprint (HMAC-SHA256-128 over the NORMALIZED CHANGE CONTENT —
  *   never the content itself), fileHash (HMAC of the edited path),
  *   fingerprintBasis (content|path), verificationKind (for Bash commands —
  *   never the command text), testsFailedCount (a bare number).
  *
- * Fingerprints are keyed with a per-install secret (POC-03.5.1): digests
- * cannot be candidate-matched without this machine's secret. The secret is
- * generated locally, stored outside any repository, and never sent anywhere.
+ * Fingerprints are keyed with a per-install secret (POC-03.5.1). PostToolUse
+ * hooks may run CONCURRENTLY, so first-use secret creation is race-safe
+ * (POC-04A.1): exclusive create, losers converge on the winner's secret.
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 const EVENTS_FILE =
   process.env.AGENT_PIGEON_EVENTS ?? join(homedir(), '.agent-pigeon', 'events.jsonl');
 
 const IMPLEMENTATION_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-const TEST_PATTERN =
-  /\b(npm (?:run )?test|pnpm (?:run )?test|yarn test|jest\b|vitest\b|pytest\b|node --test\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b)/i;
-const DEVICE_PATTERN = /\b(adb(?:\.exe)?\s|agent-device\s|emulator\s|maestro\s)/i;
-const BUILD_PATTERN =
-  /\b(gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|npm run build\b|go build\b|dotnet build\b|cargo build\b)/i;
+// Test/spec file paths: editing these is verification preparation (POC-04C.2).
+const TEST_PATH = /(^|\/)(tests?|__tests__|spec)(\/|$)|\.(test|spec)\.[a-z]+$/i;
 
-// --- per-install secret (POC-03.5.1) --------------------------------------
+// MIRROR of src/replay/claude.ts classifyVerificationCommand. The live
+// governor and replay must agree about what counts as evidence; a parity test
+// drives this script and compares it against the TS classifier.
+const SCRIPT_TEST = String.raw`(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:test|tests|spec|e2e|unit)(?::[\w:.-]+)?\b`;
+const SCRIPT_BUILD = String.raw`(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:build|typecheck|type-check|tsc|compile|check|verify|ci)(?::[\w:.-]+)?\b`;
+
+const TEST_PATTERN = new RegExp(
+  String.raw`\b(${SCRIPT_TEST}|jest\b|vitest\b|pytest\b|node --test\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b|mvn\b[^|;&]*\btest\b|dotnet test\b)`,
+  'i',
+);
+const DEVICE_PATTERN = /\b(adb(?:\.exe)?\s|agent-device\s|emulator\s|maestro\s|xcrun\s)/i;
+const BUILD_PATTERN = new RegExp(
+  String.raw`\b(${SCRIPT_BUILD}|gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|go build\b|dotnet build\b|cargo build\b)`,
+  'i',
+);
+
+// --- per-install secret (race-safe, POC-04A.1) ----------------------------
 // Mirrors src/replay/secret.ts. Lives OUTSIDE any repository
-// (<AGENT_PIGEON_HOME | ~/.agent-pigeon>/secret.key, mode 0600). Never
-// committed, never included in events or Jev payloads.
+// (<AGENT_PIGEON_HOME | ~/.agent-pigeon>/secret.key). Concurrent first-use
+// hooks converge on ONE secret via exclusive create + read-after-lose.
 
 function pigeonHome() {
   return process.env.AGENT_PIGEON_HOME ?? join(homedir(), '.agent-pigeon');
+}
+
+const SECRET_PATTERN = /^[0-9a-f]{64}$/u;
+
+function readValidSecret(secretPath) {
+  if (!existsSync(secretPath)) return null;
+  const existing = readFileSync(secretPath, 'utf8').trim();
+  return SECRET_PATTERN.test(existing) ? existing : null;
+}
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function waitAndReadValidSecret(secretPath, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const secret = readValidSecret(secretPath);
+    if (secret !== null) return secret;
+    sleep(25);
+  }
+  return null;
 }
 
 function loadOrCreateSecret() {
   const dir = pigeonHome();
   mkdirSync(dir, { recursive: true });
   const secretPath = join(dir, 'secret.key');
-  if (existsSync(secretPath)) {
-    const existing = readFileSync(secretPath, 'utf8').trim();
-    if (existing.length >= 32) return existing;
-  }
+
+  const existing = readValidSecret(secretPath);
+  if (existing !== null) return existing;
+
   const secret = randomBytes(32).toString('hex');
-  writeFileSync(secretPath, `${secret}\n`, { encoding: 'utf8', mode: 0o600 });
-  return secret;
+  try {
+    // Exclusive create: concurrent processes race; exactly one wins.
+    const fd = openSync(secretPath, 'wx');
+    try {
+      writeSync(fd, `${secret}\n`);
+    } finally {
+      closeSync(fd);
+    }
+    try {
+      chmodSync(secretPath, 0o600);
+    } catch {
+      // best-effort on platforms without POSIX modes
+    }
+    return secret;
+  } catch (error) {
+    if (error?.code !== 'EEXIST') throw error;
+  }
+
+  // Lost the creation race: converge on the winner's secret (may still be
+  // mid-flush, so poll briefly).
+  const winners = waitAndReadValidSecret(secretPath);
+  if (winners !== null) return winners;
+  throw new Error('unable to converge on the per-install secret');
 }
+
+// --- fingerprints (HMAC-SHA256-128, POC-03.5.1) ---------------------------
+// Canonicalization: serialization mechanics only (stable JSON key order,
+// line endings). NO whitespace collapsing — indentation is semantics.
 
 function hmacFingerprint(secret, canonical) {
   return createHmac('sha256', secret).update(canonical, 'utf8').digest('hex').slice(0, 32);
@@ -63,11 +123,10 @@ function hmacFingerprint(secret, canonical) {
 
 const lf = (text) => String(text).replace(/\r\n?/gu, '\n');
 
-// Canonicalization: serialization mechanics only (stable JSON key order,
-// line endings). NO whitespace collapsing — indentation is semantics.
 function contentFingerprint(secret, op, parts) {
   return hmacFingerprint(secret, JSON.stringify({ v: 2, op, parts: parts.map(lf) }));
 }
+
 function pathFingerprint(secret, paths) {
   return hmacFingerprint(secret, JSON.stringify({ v: 2, op: 'paths', paths: [...paths].sort() }));
 }
@@ -80,6 +139,9 @@ function changeIdentity(toolName, input, secret) {
   }
   const unique = [...new Set(paths)];
   const pathHash = unique.length > 0 ? pathFingerprint(secret, unique) : null;
+  // Test/spec-only edits are verification preparation (POC-04C.2): they must
+  // not create implementation opportunities for the governor.
+  const testOnly = unique.length > 0 && unique.every((p) => TEST_PATH.test(p));
 
   let op = null;
   let parts = null;
@@ -103,9 +165,9 @@ function changeIdentity(toolName, input, secret) {
   }
 
   if (op !== null && parts !== null) {
-    return { changeFingerprint: contentFingerprint(secret, op, parts), fingerprintBasis: 'content', fileHash: pathHash };
+    return { changeFingerprint: contentFingerprint(secret, op, parts), fingerprintBasis: 'content', fileHash: pathHash, testOnly };
   }
-  return { changeFingerprint: pathHash, fingerprintBasis: pathHash !== null ? 'path' : null, fileHash: pathHash };
+  return { changeFingerprint: pathHash, fingerprintBasis: pathHash !== null ? 'path' : null, fileHash: pathHash, testOnly };
 }
 
 function classifyCommand(command) {
@@ -125,7 +187,7 @@ process.stdin.on('end', () => {
     const input = JSON.parse(raw);
     const toolName = typeof input.tool_name === 'string' ? input.tool_name : 'unknown';
 
-    let change = { changeFingerprint: null, fingerprintBasis: null, fileHash: null };
+    let change = { changeFingerprint: null, fingerprintBasis: null, fileHash: null, testOnly: null };
     if (IMPLEMENTATION_TOOLS.has(toolName)) {
       change = changeIdentity(toolName, input.tool_input ?? {}, loadOrCreateSecret());
     }
@@ -141,8 +203,7 @@ process.stdin.on('end', () => {
         ? !response.is_error
         : null;
 
-    // Failed-test COUNT only (a number — no text leaves the machine's logs in
-    // identifiable form). Single regex on Bash output, still microsecond-scale.
+    // Failed-test COUNT only (a number). Single regex on Bash output.
     let testsFailedCount = null;
     if (verificationKind === 'test' && response !== null && typeof response === 'object') {
       const out = `${typeof response.stderr === 'string' ? response.stderr : ''}${typeof response.stdout === 'string' ? response.stdout : ''}`;
@@ -158,6 +219,7 @@ process.stdin.on('end', () => {
       fileHash: change.fileHash,
       changeFingerprint: change.changeFingerprint,
       fingerprintBasis: change.fingerprintBasis,
+      testOnly: change.testOnly,
       verificationKind,
       testsFailedCount,
     };

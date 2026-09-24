@@ -1,0 +1,220 @@
+# Agent Pigeon — Public Launch Readiness
+
+- Date: 2026-09-24
+- Branch: `release/v0.1-public-check` (working tree prepared; not pushed)
+- Version: **0.1.0**
+- Tests: **103/103 pass**, clean `tsc` build, 0 type errors
+- Package audit: `npm pack` → **33 files / 45.8 kB** (unpacked 182.1 kB), 0 vulnerabilities
+
+## Decision
+
+**READY TO LAUNCH** — all technical and content items in this checklist pass.
+
+Public/registry actions are deliberately **not** performed; they are listed
+under "Exact remaining actions" and need explicit owner approval.
+
+Honest caveats (not code blockers):
+
+1. **No uncoached external tester has run it.** The earlier internal gate
+   (`V0.1-FINAL-RELEASE-GATE.md`) listed this as a human blocker. Nothing was
+   simulated to pretend otherwise.
+2. **macOS untested**, WSL untested — README claims are narrowed to the
+   platforms actually tested.
+
+## 1. Final README structure
+
+`README.md` (194 lines), in the recommended order:
+
+1. Hero — `# Agent Pigeon 🐦` / `> See how your coding agent actually worked.`
+   + a **real** `agent-pigeon flight` transcript (Codex session `019f2132`:
+   63 min, EDIT 40, VERIFY 14, FAIL→PASS 7, `✓ recognized verification found`)
+2. Why Agent Pigeon?
+3. Flight (+ subsection: Replay — broader history, with real `replay` output)
+4. Compare (real `compare 019f2132 01a0cddb` transcript)
+5. Share (commands + one real generated SVG card embedded)
+6. Install (`npx` first, then `npm install -g`; Node ≥ 20.11; platform note)
+7. Supported agents (+ platforms: Windows 11 tested, Linux/Debian 12 Docker
+   tested, macOS untested)
+8. Privacy (reads / persists / transmits / output / no API key)
+9. Limitations
+10. Research / history (`docs/research/SUMMARY.md`, `CHANGELOG.md`)
+11. License (MIT)
+
+No architecture lead, no research history up top, no AI-supervision or
+proof-system language in the hero.
+
+Claim scan (`scripts/readme-audit.mjs`): no correctness, intelligence,
+productivity, superiority, token-savings, bug-detection, or dead-end claims.
+Only conservative terms: local, read-only, no API key, nothing uploaded,
+recognized verification, FAIL→PASS, session comparison.
+
+## 2. Final install command
+
+```bash
+npx agent-pigeon flight
+```
+
+Alternative (documented):
+
+```bash
+npm install -g agent-pigeon
+agent-pigeon flight
+```
+
+No repository clone is required or documented.
+
+## 3. Final public CLI
+
+| Command | What it does |
+| --- | --- |
+| `agent-pigeon flight [--session <id-prefix>] [--json]` | one-session report |
+| `agent-pigeon compare <A> <B>` | side-by-side counts for two sessions |
+| `agent-pigeon replay [--source claude\|codex\|all] [--json]` | all local history |
+| `agent-pigeon share flight\|compare` | privacy-safe SVG card on stdout |
+| `agent-pigeon --help` / `--version` | `agent-pigeon 0.1.0` |
+
+All five verified from a **clean tarball install in an empty temp directory**
+via `npx agent-pigeon …` (Windows, this machine). Directory overrides
+`--claude-dir` / `--codex-dir` work on `flight` and `replay`.
+
+## 4. npm package audit
+
+- `npm pack`: 33 files, 45.8 kB — `dist/src/{cli,flight,compare,share}.js`,
+  `dist/src/core/**`, `dist/src/replay/**`, `README.md`, `CHANGELOG.md`,
+  `LICENSE`, `SECURITY.md`, `package.json`.
+- **0 experimental/live-governor files packaged** (`governor*`, `poc*`,
+  `experimental/*`, tests, fixtures: none present in the tarball).
+- Content scan of the extracted tarball: no emails, no personal/absolute
+  paths, no keys, no transcripts, no private project file names.
+- `npm publish --dry-run` succeeds (blocked only by "log in", as expected).
+- Package name **`agent-pigeon` is available** on registry.npmjs.org
+  (`npm view agent-pigeon` → 404 Not Found).
+- Clean install from tarball → `added 1 package`, `npx agent-pigeon --version`
+  → `agent-pigeon 0.1.0`; flight/compare/replay/share all run.
+- Note: `package.json` keeps owner-side dev scripts (`demo`, `poc:03`,
+  `governor:process`, `research:corpus`). They point at code that is **not**
+  in the published tarball; they exist for repository development only.
+- `"private": true` was **removed** (it would have blocked `npm publish`).
+
+## 5. GitHub metadata
+
+- Remote: `https://github.com/hyukvoid/agent-pigeon.git`
+- `repository` / `bugs` / `homepage` all point at
+  `github.com/hyukvoid/agent-pigeon` ✔
+- Current public response: **404** → repo is private (or not yet created);
+  it must be made public for npm links and README badge/link targets to work.
+- LICENSE: MIT, present at repo root and in the tarball ✔
+- Tracked files: 122; no `.env`, no `.tgz`, no key material tracked
+  (`*.tgz`, `dist/`, `node_modules/` are gitignored).
+- Known identity note: commit author is `Park Ji Hyuk <ghpark0508@gmail.com>`
+  (owner's own git identity) and it is also mentioned in three existing
+  release-check docs. Normal git metadata, owner's decision to keep.
+
+## 6. Share card
+
+- Embedded image: `docs/share/flight-card.svg` — generated by the shipped
+  `renderFlightSvg` renderer from real session `019f2132` (the same session
+  used in the hero `flight` output): EDIT 40, VERIFY 14, FAIL→PASS 7.
+- 1,721 bytes, self-contained, system monospace font, UTF-8 emoji intact,
+  no paths, no commands, no prompts, no clipping in layout math.
+- No PNG pipeline, no hosted sharing, no themes, no gallery added.
+
+## 7. Platform claims
+
+| Platform | Status |
+| --- | --- |
+| Windows 11 | **tested** (all work in this task re-run here) |
+| Linux (Debian 12, Node 20, Docker, offline) | **tested** (earlier gate, real tarball) |
+| macOS | **untested** — stated as such in README |
+| WSL | untested |
+
+## 8. Launch copy
+
+**GitHub repository description**
+
+> 🐦 See how your coding agent actually worked. A tiny local CLI that turns
+> Claude Code / Codex sessions into flight reports: edits, verification runs,
+> FAIL→PASS loops, and session comparisons. Local · read-only · no API key.
+
+**GitHub Release `v0.1.0` (concise notes)**
+
+> First public release of Agent Pigeon, a local CLI for Claude Code and Codex
+> session history.
+>
+> - `flight` — one-session report: READ/EDIT/VERIFY bars, biggest FAIL→PASS
+>   loop, most-touched file, longest unverified streak, final verification state
+> - `compare` — factual side-by-side counts for two sessions (no scores)
+> - `replay` — the same analysis across all local sessions, `--json` supported
+> - `share` — self-contained, privacy-safe SVG card on stdout
+>
+> Local, read-only, no API key, no network calls, nothing uploaded.
+> Parses `~/.claude/projects` and `~/.codex/sessions`; other agents are not
+> parsed yet. Tested on Windows 11 and Linux (Debian 12, Node 20, Docker);
+> macOS untested. MIT.
+
+**Reddit (r/ClaudeAI or r/OpenAI / r/commandline)**
+
+> Title: *A tiny local CLI that turns Claude Code / Codex sessions into a
+> "flight report"*
+>
+> I kept wondering what my agent actually did during a long session, so I
+> built Agent Pigeon: it reads your local Claude Code / Codex history and
+> prints edits, recognized verification runs, and the FAIL→PASS debugging
+> loops — plus side-by-side comparison of two sessions.
+>
+> `npx agent-pigeon flight`
+>
+> It's local, read-only, no API key, nothing leaves your machine. It only
+> reports what it can recognize (build/test commands), so treat it as a prompt
+> to inspect, not a verdict. Curious what it shows on your sessions — macOS is
+> still untested if anyone wants to try it there.
+
+**Hacker News (Show HN)**
+
+> Title: *Show HN: Agent Pigeon – a local CLI that reports how your coding
+> agent actually worked*
+>
+> Agent Pigeon reads the Claude Code / Codex session history already on your
+> disk and prints a short report: how much the agent read vs. edited, what
+> recognized verification ran, and whether a FAIL→PASS debugging loop ever
+> closed. You can also diff two sessions side by side and export the report
+> as an SVG card.
+>
+> It is local and read-only — no API key, no network code, nothing uploaded —
+> and it deliberately scores nothing. Only build/test commands it recognizes
+> count as verification, so project-specific checks can be invisible. Node
+> ≥ 20.11; tested on Windows and Linux, macOS untested.
+
+**X / Twitter**
+
+> I built Agent Pigeon 🐦 — a tiny local CLI that reads your Claude Code /
+> Codex session history and shows how the work actually went: edits,
+> verification runs, FAIL→PASS loops, and side-by-side session comparison.
+> Local, read-only, no API key, nothing uploaded.
+> `npx agent-pigeon flight`
+
+## 9. Exact remaining manual / public actions
+
+None of these have been performed. Each needs explicit owner approval.
+
+1. Review `README.md`, `package.json`, and this file; review the embedded
+   card `docs/share/flight-card.svg`.
+2. **Final local commit** (prepared: README rewrite, package metadata,
+   `docs/share/flight-card.svg`, `scripts/readme-audit.mjs`).
+3. **Push** `release/v0.1-public-check`; **merge to `main`** if that is the
+   branch GitHub serves.
+4. **Make the GitHub repository public.**
+5. **Publish:** `npm login` → `npm publish` (name verified available;
+   `npm publish --dry-run` already passes).
+6. **Tag:** `git tag v0.1.0 && git push origin v0.1.0`.
+7. **GitHub Release** `v0.1.0` with the notes in §8.
+8. Set the **GitHub repository description** (§8).
+9. Smoke-check `npx agent-pigeon flight` against the *published* package
+   (pre-publish it cannot be tested from the registry; it was tested from the
+   identical tarball).
+10. Optionally post the Reddit / HN / X copy (§8) after step 5.
+11. Optional honesty items: one uncoached external tester run, and a macOS
+    smoke test (would upgrade the platform table).
+
+**Do not publish, push, tag, or make the repo public without explicit user
+approval. STOP.**

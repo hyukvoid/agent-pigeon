@@ -18,6 +18,7 @@ export interface ReplaySessionMeta {
   sessionId8: string;
   lineCount: number;
   parsedLineCount: number;
+  lastEventMs: number | null;
   /** ISO timestamp of the first timestamped line. Not persisted in reports. */
   startedAtIso: string | null;
 }
@@ -31,6 +32,7 @@ export interface ClaudeSessionLine {
   type?: string;
   timestamp?: string;
   sessionId?: string;
+  cwd?: string;
   isSidechain?: boolean;
   message?: {
     content?: Array<{
@@ -55,11 +57,51 @@ function sha8(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 8);
 }
 
-const TEST_PATTERN =
-  /\b(npm (?:run )?test|pnpm (?:run )?test|yarn test|jest\b|vitest\b|pytest\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b|mvn\b[^|;&]*\btest\b|dotnet test\b)/i;
+/** Test/spec file paths (POC-04C.2): editing these is verification preparation, not a new implementation attempt. */
+const TEST_PATH = /(^|\/)(tests?|__tests__|spec)(\/|$)|\.(test|spec)\.[a-z]+$/i;
+
+/**
+ * Display-safe path for reports (POC flight): strip drive letters, make the
+ * path repo-relative when the session cwd is known, otherwise keep at most
+ * the last 4 segments so home-directory names never surface. Forward slashes.
+ */
+function displayPath(raw: string, cwd: string | null): string {
+  let p = raw.replace(/[\\]+/gu, '/');
+  const drive = /^[A-Za-z]:\//u;
+  if (drive.test(p)) p = p.slice(2);
+  if (cwd !== null && cwd.length > 0) {
+    const c = cwd.replace(/[\\]+/gu, '/').replace(drive, '').replace(/\/+$/u, '');
+    if (c.length > 0 && p.toLowerCase().startsWith(c.toLowerCase() + '/')) {
+      p = p.slice(c.length + 1);
+    }
+  }
+  const segments = p.split('/').filter((seg) => seg.length > 0);
+  if (segments.length > 4) return '…/' + segments.slice(-4).join('/');
+  return segments.join('/');
+}
+
+/**
+ * Package-manager script indirection. Most repositories do not run `tsc` or
+ * `jest` directly — they run `npm run typecheck`, `pnpm run test:unit`,
+ * `yarn e2e`. Matching only the underlying tool makes real verification
+ * invisible to the classifier (this repository's own fast check is
+ * `npm run typecheck`).
+ *
+ * Deliberately excluded: lint/format/prettier/eslint scripts. They neither
+ * compile nor execute the code, so they are not proof that a change works.
+ */
+const SCRIPT_TEST = String.raw`(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:test|tests|spec|e2e|unit)(?::[\w:.-]+)?\b`;
+const SCRIPT_BUILD = String.raw`(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:build|typecheck|type-check|tsc|compile|check|verify|ci)(?::[\w:.-]+)?\b`;
+
+const TEST_PATTERN = new RegExp(
+  String.raw`\b(${SCRIPT_TEST}|jest\b|vitest\b|pytest\b|node --test\b|playwright\b|go test\b|cargo test\b|gradlew?(?:\.bat)?\b[^|;&]*\btest\b|mvn\b[^|;&]*\btest\b|dotnet test\b)`,
+  'i',
+);
 const DEVICE_PATTERN = /\b(adb(?:\.exe)?\s|agent-device\s|emulator\s|maestro\s|xcrun\s)/i;
-const BUILD_PATTERN =
-  /\b(gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|npm run build\b|pnpm run build\b|yarn build\b|go build\b|dotnet build\b|cargo build\b)/i;
+const BUILD_PATTERN = new RegExp(
+  String.raw`\b(${SCRIPT_BUILD}|gradlew?(?:\.bat)?\s|gradle\s|mvn\s|make\b|cmake\b|tsc\b|go build\b|dotnet build\b|cargo build\b)`,
+  'i',
+);
 
 export function classifyVerificationCommand(command: string): VerificationKind | null {
   if (TEST_PATTERN.test(command)) return 'test';
@@ -89,8 +131,12 @@ export function extractFailedCount(text: string): number | null {
 
 /**
  * Normalize error text so the same failure hashes the same across attempts:
- * digits, hex blobs and paths are masked before hashing. The result is a
- * short identity hash — the text itself is discarded.
+ * digits, hex blobs and paths are masked, then up to THREE content lines are
+ * hashed (POC-04C hardening). Harness wrapper lines ("Script failed",
+ * "Command failed", bare exit-code statements) are discarded BEFORE hashing —
+ * hashing them caused every failed command in every project to share one
+ * signature (a real false-positive source found by POC-04C auditing).
+ * The text itself is discarded; only the digest survives.
  */
 export function failureSignature(text: string): string {
   const normalized = text
@@ -98,11 +144,22 @@ export function failureSignature(text: string): string {
     .replace(/(?:\/(?:home|Users|root|tmp|var|mnt)\/\S+)/g, '<PATH>')
     .replace(/\b[0-9a-f]{8,}\b/gi, '<HEX>')
     .replace(/\b\d+(?:\.\d+)?\b/g, '<N>');
-  const firstMeaningful = normalized
+
+  const GENERIC_LINE =
+    /^(?:(?:script|command|shell|exec(?:ution)?)\s+(?:failed|completed|error)?\s*[:]?|wall time:? <N>(?: seconds)?|output:?|exit code[:\s]*<N>|process exited(?: with code <N>)?|failed|error|<N>)\s*$/i;
+
+  const contentLines = normalized
     .split(/\r?\n/u)
     .map((line) => line.trim())
-    .filter((line) => line.length > 3)[0];
-  return sha8(firstMeaningful ?? normalized);
+    .filter((line) => line.length > 3 && !GENERIC_LINE.test(line));
+
+  if (contentLines.length === 0) {
+    // nothing content-bearing: fall back to a fixed "opaque failure" identity
+    return sha8('<opaque-failure>');
+  }
+  // Error summaries live at the END of build/test output — hash the LAST
+  // three content lines. (First lines are usually harness wrappers.)
+  return sha8(contentLines.slice(-3).join('\n'));
 }
 
 interface ToolResultContent {
@@ -129,7 +186,7 @@ interface ImplementationInput {
  */
 function changeIdentityFromInput(
   input: ImplementationInput,
-  secret: string,
+  secret: string | null,
 ): {
   count: number | null;
   hash: string | null;
@@ -141,7 +198,7 @@ function changeIdentityFromInput(
     paths.push(...input.file_path.filter((p): p is string => typeof p === 'string'));
   }
   const unique = [...new Set(paths)];
-  const pathHash = unique.length > 0 ? pathFingerprint(secret, unique) : null;
+  const pathHash = unique.length > 0 && secret !== null ? pathFingerprint(secret, unique) : null;
 
   let op: 'edit' | 'write' | 'notebook' | 'multi-edit' | null = null;
   let parts: string[] | null = null;
@@ -166,7 +223,7 @@ function changeIdentityFromInput(
     }
   }
 
-  if (op !== null && parts !== null) {
+  if (op !== null && parts !== null && secret !== null) {
     return {
       count: unique.length > 0 ? unique.length : null,
       hash: contentFingerprint(secret, op, parts),
@@ -186,20 +243,50 @@ function contentText(content: string | ToolResultContent[] | undefined): string 
   return '';
 }
 
+
+function implementationTouchesOnlyTestFiles(input: ImplementationInput): boolean {
+  const paths: string[] = [];
+  if (typeof input.file_path === 'string') paths.push(input.file_path);
+  else if (Array.isArray(input.file_path)) {
+    paths.push(...input.file_path.filter((p): p is string => typeof p === 'string'));
+  }
+  if (paths.length === 0) return false;
+  return paths.every((p) => TEST_PATH.test(p));
+}
+
 /** Parse one session JSONL (as a string) into sanitized events + meta. */
-export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'session'): ReplaySession {
+export interface ParseOptions {
+      /**
+       * Compute HMAC content fingerprints (default true — the research pipeline
+       * needs them). Replay passes false: replay needs no fingerprints, and
+       * skipping them keeps replay genuinely read-only (no secret file is ever
+       * created).
+       */
+      fingerprints?: boolean;
+    }
+
+export function parseClaudeSessionJsonl(
+  text: string,
+  sessionId8Fallback = 'session',
+  opts: ParseOptions = {},
+): ReplaySession {
   const lines = text.split(/\r?\n/u).filter((line) => line.length > 0);
   const meta: ReplaySessionMeta = {
     sessionId8: sessionId8Fallback,
     lineCount: lines.length,
     parsedLineCount: 0,
+    lastEventMs: null,
     startedAtIso: null,
   };
   const events: SanitizedReplayEvent[] = [];
 
   let epochMs: number | null = null;
-  // Per-install HMAC key for change/path fingerprints (loaded once per parse).
-  const secret = loadOrCreateSecret();
+  let cwd: string | null = null;
+  // Model-turn ordinal: each assistant message is one turn/batch (POC-04C.2).
+  let turnSeq = 0;
+  // Per-install HMAC key for change/path fingerprints. Only loaded when
+  // fingerprints are requested — replay runs without it (genuinely read-only).
+  const secret = opts.fingerprints === false ? null : loadOrCreateSecret();
   /** tool_use_id -> in-flight call (toolName + kind), for pairing results. */
   const pending = new Map<
     string,
@@ -220,6 +307,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
     if (obj.sessionId !== undefined) {
       meta.sessionId8 = obj.sessionId.slice(0, 8);
     }
+    if (typeof obj.cwd === 'string' && obj.cwd.length > 0) cwd = obj.cwd;
     if (obj.type !== 'assistant' && obj.type !== 'user') continue;
     meta.parsedLineCount++;
 
@@ -232,17 +320,28 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
           meta.startedAtIso = obj.timestamp;
         }
         offset = ms - epochMs;
+          if (meta.lastEventMs === null || ms > meta.lastEventMs) meta.lastEventMs = ms;
       }
     }
 
     const content = obj.message?.content;
     if (!Array.isArray(content)) continue;
 
+    // One assistant message = one model turn / tool batch (POC-04C.2). All
+    // implementation calls inside it are ONE logical change, not N attempts.
+    const messageHasImpl =
+      obj.type === 'assistant' &&
+      content.some((c) => c.type === 'tool_use' && typeof c.name === 'string' && IMPLEMENTATION_TOOLS.includes(c.name));
+    if (messageHasImpl) turnSeq++;
+    const messageTurn: number | null = messageHasImpl ? turnSeq : null;
+
     for (const block of content) {
       if (obj.type === 'assistant' && block.type === 'tool_use' && typeof block.name === 'string') {
         const toolName = block.name;
         if (IMPLEMENTATION_TOOLS.includes(toolName)) {
-          const change = changeIdentityFromInput((block.input ?? {}) as ImplementationInput, secret);
+          const input = (block.input ?? {}) as ImplementationInput;
+          const change = changeIdentityFromInput(input, secret);
+          const testOnly = implementationTouchesOnlyTestFiles(input);
           const id = (block as unknown as { id?: string }).id ?? '';
           pending.set(id, { toolName, verificationKind: null, change });
           events.push({
@@ -257,6 +356,11 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
             failureSignatureHash: null,
             testsFailedCount: null,
             durationMs: null,
+            turn: messageTurn,
+            testOnly,
+            path: typeof (block.input as { file_path?: unknown }).file_path === 'string'
+              ? displayPath((block.input as { file_path: string }).file_path, cwd)
+              : null,
           });
         } else if (toolName === 'Bash') {
           const command = typeof (block.input as { command?: unknown } | undefined)?.command === 'string'
@@ -295,6 +399,7 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
             });
           }
         } else {
+          const filePath = (block.input as { file_path?: unknown } | undefined)?.file_path;
           events.push({
             eventType: 'observation',
             timestampOffset: offset,
@@ -307,6 +412,9 @@ export function parseClaudeSessionJsonl(text: string, sessionId8Fallback = 'sess
             failureSignatureHash: null,
             testsFailedCount: null,
             durationMs: null,
+            path: typeof filePath === 'string' && filePath.length > 0
+              ? displayPath(filePath, cwd)
+              : null,
           });
         }
       }

@@ -11,3 +11,4 @@ dist/
 # OS noise
 .DS_Store
 *.log
+*.tgz

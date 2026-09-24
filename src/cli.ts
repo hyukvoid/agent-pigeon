@@ -1,188 +1,339 @@
 #!/usr/bin/env node
 /**
- * POC-00 CLI.
+ * Agent Pigeon — public CLI (v0.1: flight / compare / replay / share).
  *
- *   npm run poc:00 [-- --scenario a|b|c|all] [--print-payload] [--json] [--no-jev]
+ *   agent-pigeon flight     One-session "flight report" (read-only)
+ *   agent-pigeon compare    Side-by-side comparison of two sessions
+ *   agent-pigeon replay     Analyze local coding-agent history (read-only)
+ *   agent-pigeon share      SVG card of a flight/compare report (stdout)
+ *   agent-pigeon --help
+ *   agent-pigeon --version
  *
- * Runs the deterministic pipeline over the mandatory fixtures, optionally
- * consults Jev (if JEV_API_KEY is configured), and prints the report.
- * POC-00 never injects anything into a coding agent — policy is computed and
- * displayed only (§11).
+ * Replay is genuinely read-only: it reads local session history, computes
+ * counts in memory, and prints a report. It creates no files, stores no
+ * state, and never accesses the network. A live governor was researched and
+ * intentionally withheld from v0.1 (see experimental/ and docs/research).
  */
 
 import { performance } from 'node:perf_hooks';
-import { evaluateScenario } from './core/evaluate.js';
-import { buildJevPayload, payloadSafetyIssues } from './jev/payload.js';
-import { OpenAiCompatibleJev } from './jev/openai.js';
-import type { JevOutcome, JevPayload, JevProvider } from './jev/types.js';
-import type { AttemptEvidence } from './core/types.js';
-import { SCENARIOS, loadAttempts } from './fixtures.js';
-import { renderScenario } from './report.js';
 
-interface CliArgs {
-  scenario: 'a' | 'b' | 'c' | 'all';
-  printPayload: boolean;
-  json: boolean;
-  noJev: boolean;
+import { discoverSessions, analyzeFile, scanSessions } from './replay/corpus.js';
+import type { SessionAnalysis } from './replay/corpus.js';
+import { flightFacts, renderFlight, codingSessions, parseFlightArgs } from './flight.js';
+import { buildCompare } from './compare.js';
+import { renderFlightSvg, renderCompareSvg } from './share.js';
+
+function humanCount(n: number): string {
+  return n.toLocaleString('en-US');
 }
 
-function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { scenario: 'all', printPayload: false, json: false, noJev: false };
+function printHelp(): void {
+  process.stdout.write(`Agent Pigeon — proof-of-progress for coding agents
+
+Usage:
+  agent-pigeon flight [options]     Flight report for the most recent
+                                    coding session (read-only)
+  agent-pigeon compare <A> <B>      Side-by-side comparison of two sessions
+  agent-pigeon replay [options]     Analyze all local agent history
+  agent-pigeon share flight         SVG card for a session, printed to stdout
+  agent-pigeon share compare        SVG card comparing two sessions, to stdout
+  agent-pigeon --help               Show this help
+  agent-pigeon --version            Show version
+
+Flight options:
+  --session <id-prefix>             Report a specific session
+  --json                            Machine-readable output
+  --claude-dir <path>               Override Claude history directory
+  --codex-dir <path>                Override Codex history directory
+
+Replay options:
+  --source <claude|codex|all>       Which history to analyze (default: all)
+  --json                            Machine-readable output
+  --claude-dir <path>               Override Claude history directory
+  --codex-dir <path>                Override Codex history directory
+
+Replay reads your local session history, computes counts in memory, and
+prints a report. It creates nothing, stores nothing, and sends nothing.
+Share prints an SVG card of the same facts — also local-only.
+`);
+}
+
+interface ReplayArgs {
+  source: 'all' | 'claude' | 'codex';
+  json: boolean;
+  claudeDir?: string;
+  codexDir?: string;
+}
+
+function parseReplayArgs(argv: string[]): ReplayArgs {
+  const args: ReplayArgs = { source: 'all', json: false };
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    switch (arg) {
-      case '--scenario': {
-        const value = argv[i + 1];
-        if (value === 'a' || value === 'b' || value === 'c' || value === 'all') {
-          args.scenario = value;
-          i++;
-        } else {
-          throw new Error(`--scenario expects a|b|c|all, got ${value ?? '(missing)'}`);
-        }
-        break;
-      }
-      case '--print-payload':
-        args.printPayload = true;
-        break;
-      case '--json':
-        args.json = true;
-        break;
-      case '--no-jev':
-        args.noJev = true;
-        break;
-      default:
-        throw new Error(`unknown argument: ${arg ?? '(empty)'}`);
-    }
+    const a = argv[i];
+    if (a === '--json') args.json = true;
+    else if (a === '--source') {
+      const v = argv[i + 1];
+      if (v === 'claude' || v === 'codex' || v === 'all') {
+        args.source = v;
+        i++;
+      } else throw new Error(`--source expects claude|codex|all, got ${v ?? '(missing)'}`);
+    } else if (a === '--claude-dir') {
+      args.claudeDir = argv[i + 1] ?? '';
+      i++;
+    } else if (a === '--codex-dir') {
+      args.codexDir = argv[i + 1] ?? '';
+      i++;
+    } else throw new Error(`unknown option: ${a ?? '(empty)'}`);
   }
   return args;
 }
 
-interface ScenarioResult {
-  scenarioId: string;
-  title: string;
-  attempts: AttemptEvidence[];
-  signals: ReturnType<typeof evaluateScenario>['signals'];
-  evaluation: ReturnType<typeof evaluateScenario>['evaluation'];
-  jev: JevOutcome | null;
-  payload: JevPayload | null;
-  payloadIssues: string[];
-  deterministicMs: number;
-}
-
-async function runScenario(
-  definition: (typeof SCENARIOS)[number],
-  jevProvider: JevProvider | null,
-  args: CliArgs,
-): Promise<ScenarioResult> {
-  const attempts = loadAttempts(definition.fixturePath);
-
-  const startedAt = performance.now();
-  const { signals, evaluation } = evaluateScenario(attempts);
-  const deterministicMs = performance.now() - startedAt;
-
-  let jev: JevOutcome | null = null;
-  let payload: JevPayload | null = null;
-  const payloadIssues: string[] = [];
-
-  const last = attempts[attempts.length - 1];
-  const prev = attempts[attempts.length - 2];
-  if (jevProvider !== null && last !== undefined && prev !== undefined) {
-    payload = buildJevPayload(prev, last, signals);
-    payloadIssues.push(...payloadSafetyIssues(payload));
-    if (!jevProvider.isConfigured()) {
-      jev = { available: false, reason: 'JEV: unavailable (no API key configured)' };
-    } else {
-      jev = await jevProvider.evaluate(payload);
-    }
-  } else if (jevProvider === null) {
-    jev = { available: false, reason: 'JEV: skipped (--no-jev)' };
-  }
-
-  return {
-    scenarioId: definition.id,
-    title: definition.title,
-    attempts,
-    signals,
-    evaluation,
-    jev,
-    payload,
-    payloadIssues,
-    deterministicMs,
-  };
-}
-
-function renderText(results: ScenarioResult[]): string {
-  const blocks = results.map((result) =>
-    renderScenario({
-      scenarioTitle: result.title,
-      attempts: result.attempts,
-      signals: result.signals,
-      evaluation: result.evaluation,
-      jev: result.jev,
-      timing: { deterministicMs: result.deterministicMs, jevMs: null },
-    }),
-  );
-  return ['Agent Pigeon — POC-00', '', blocks.join('\n\n')].join('\n') + '\n';
-}
-
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-  const selected =
-    args.scenario === 'all' ? SCENARIOS : SCENARIOS.filter((s) => s.id === args.scenario);
-
-  const useJev = !args.noJev;
-  const jevProvider: JevProvider | null = useJev ? new OpenAiCompatibleJev() : null;
-
-  const results: ScenarioResult[] = [];
-  for (const definition of selected) {
-    results.push(await runScenario(definition, jevProvider, args));
-  }
-
-  if (args.printPayload) {
-    for (const result of results) {
-      if (result.payload !== null) {
-        process.stdout.write(
-          `--- Jev payload (${result.title}) ---\n${JSON.stringify(result.payload, null, 2)}\n`,
-        );
+function implementationTurnCount(sessions: SessionAnalysis[]): number {
+  const direct = new Set<string>();
+  let turnAware = false;
+  for (const s of sessions) {
+    for (const e of s.events) {
+      if (e.eventType !== 'implementation' || e.testOnly === true) continue;
+      if (e.turn !== null && e.turn !== undefined) {
+        turnAware = true;
+        direct.add(`${s.source}:${s.sessionId8}:${e.turn}`);
       }
     }
   }
+  if (turnAware) return direct.size;
+  return sessions.reduce((sum, s) => sum + s.attempts.length, 0);
+}
+
+function runReplay(args: ReplayArgs): void {
+  const startedAt = performance.now();
+  const discovered = discoverSessions({ claudeDir: args.claudeDir, codexDir: args.codexDir });
+  const considered = discovered.files.filter((e) => args.source === 'all' || e.source === args.source);
+
+  const sessions: SessionAnalysis[] = [];
+  let unreadable = 0;
+  let done = 0;
+  for (const entry of considered) {
+    try {
+      sessions.push(analyzeFile(entry.path, entry.source, { fingerprints: false }));
+    } catch {
+      unreadable++;
+    }
+    done++;
+    if (!args.json && done % 50 === 0) {
+      process.stderr.write(`scanned ${done}/${considered.length} history files…\n`);
+    }
+  }
+  const workerMs = performance.now() - startedAt;
+
+  const usable = sessions.filter((s) => s.attempts.length > 0);
+  const totalAttempts = usable.reduce((sum, s) => sum + s.attempts.length, 0);
+  const implementationChanges = usable.reduce((sum, s) => sum + s.implementationCalls, 0);
+  const verificationRuns = usable.reduce((sum, s) => sum + s.verificationRuns, 0);
+  const implementationTurns = implementationTurnCount(usable);
+  const productive = sessions.flatMap((s) =>
+    s.findings.filter((f) => f.kind === 'productive').map((f) => ({ session: s, finding: f })),
+  );
+  const unverified = sessions.flatMap((s) =>
+    s.findings
+      .filter((f) => f.kind === 'verification-debt')
+      .map((f) => ({
+        session: s,
+        finding: f,
+        turns: /(\d+) distinct implementation turns/.exec(f.detail)?.[1] ?? null,
+      })),
+  );
+  unverified.sort((a, b) => Number(b.turns ?? 0) - Number(a.turns ?? 0));
+  const mobileSessions = usable.filter((s) => s.mobile).length;
 
   if (args.json) {
     process.stdout.write(
-      `${JSON.stringify(
+      JSON.stringify(
         {
-          poc: '00',
-          scenarios: results.map((result) => ({
-            id: result.scenarioId,
-            title: result.title,
-            attempts: result.attempts.length,
-            signals: result.signals,
-            evaluation: result.evaluation,
-            jev: result.jev,
-            payloadIssues: result.payloadIssues,
-            deterministicMs: result.deterministicMs,
-          })),
+          scanned: {
+            total: sessions.length + unreadable,
+            claude: sessions.filter((s) => s.source === 'claude').length,
+            codex: sessions.filter((s) => s.source === 'codex').length,
+            unreadable,
+          },
+          sessionsWithCodeChanges: sessions.filter((s) => s.implementationCalls > 0).length,
+          usableSessions: usable.length,
+          attempts: totalAttempts,
+          implementationChanges,
+          implementationTurns,
+          recognizedVerificationRuns: verificationRuns,
+          mobileFlaggedSessions: mobileSessions,
+          unverifiedStretches: unverified.length,
+          productiveLoops: productive.length,
+          workerMs: +workerMs.toFixed(1),
         },
         null,
         2,
-      )}\n`,
+      ) + '\n',
     );
     return;
   }
 
-  process.stdout.write(renderText(results));
+  const L = (name: string, value: string | number): string => `  ${name.padEnd(30, ' ')}${value}`;
+  const lines: string[] = [];
+  lines.push('Agent Pigeon — replay');
+  lines.push('');
+  lines.push(L('History scanned', `${humanCount(sessions.length + unreadable)} sessions`));
+  lines.push(L('Sessions with code changes', `${sessions.filter((s) => s.implementationCalls > 0).length}`));
+  lines.push(L('Implementation attempts', humanCount(totalAttempts)));
+  lines.push(L('Implementation changes', humanCount(implementationChanges)));
+  lines.push(L('Recognized verification runs', humanCount(verificationRuns)));
+  lines.push('');
+  lines.push(`Unverified implementation stretches — ${unverified.length}`);
+  lines.push('  Stretches where the agent changed code across 3+ separate turns');
+  lines.push('  without any recognized verification (build / test / device run).');
+  for (const u of unverified.slice(0, 5)) {
+    lines.push(`  · ${u.session.source} session ${u.session.sessionId8} · ${u.turns ?? '?'} turns · ${u.finding.confidence.toLowerCase()} confidence`);
+  }
+  if (unverified.length > 5) lines.push(`  … and ${unverified.length - 5} more (--json for the full list)`);
+  lines.push('');
+  lines.push(`Recognized verification loops — ${productive.length}`);
+  lines.push('  Verification failed, then passed. Healthy debugging — no warnings for these.');
+  lines.push('');
+  lines.push('Notes');
+  lines.push('  · "Recognized" = build / test / device commands Agent Pigeon can identify.');
+  lines.push('    Project-specific checks (custom scripts, smoke runs) may be invisible —');
+  lines.push('    treat these results as prompts to inspect, not verdicts.');
+  lines.push('  · Read-only: nothing was modified, stored, or uploaded.');
+  process.stdout.write(lines.join('\n') + '\n');
+}
 
-  for (const result of results) {
-    if (result.payloadIssues.length > 0) {
-      process.stderr.write(
-        `PRIVACY WARNING (${result.title}): ${result.payloadIssues.join('; ')}\n`,
-      );
-    }
+function runFlight(args: import('./flight.js').FlightArgs): void {
+  const discovered = discoverSessions({ claudeDir: args.claudeDir, codexDir: args.codexDir });
+  const { sessions, unreadable } = scanSessions(discovered.files);
+  void unreadable;
+  const candidates = codingSessions(sessions);
+  const selected =
+    args.session !== undefined
+      ? candidates.filter((s) => s.sessionId8.startsWith(args.session as string))
+      : candidates;
+
+  if (selected.length === 0) {
+    const message =
+      args.session !== undefined
+        ? `no coding session matching "${args.session}" found in local history`
+        : 'no coding sessions with implementation activity found in local history';
+    process.stdout.write(message + '\n');
+    return;
+  }
+
+  const session = selected[0];
+  if (session === undefined) return;
+  const facts = flightFacts(session);
+
+  if (args.json) {
+    const { sourceLabel: _sl, ...rest } = facts;
+    void _sl;
+    process.stdout.write(JSON.stringify({ source: session.source, ...rest }, null, 2) + '\n');
+    return;
+  }
+
+  process.stdout.write(renderFlight(facts) + '\n');
+  if (selected.length > 1) {
+    process.stderr.write(`${selected.length - 1} more coding session(s) available — pick one with --session <id-prefix>\n`);
   }
 }
 
-main().catch((error: unknown) => {
-  process.stderr.write(`poc:00 failed: ${error instanceof Error ? error.message : String(error)}\n`);
+function runCompare(idA: string | null, idB: string | null): void {
+  if (idA === null || idB === null) {
+    process.stderr.write('usage: agent-pigeon compare <sessionA-id> <sessionB-id>\n');
+    process.exitCode = 1;
+    return;
+  }
+
+  const discovered = discoverSessions();
+  const { sessions } = scanSessions(discovered.files);
+  const coding = codingSessions(sessions);
+
+  const resolve = (prefix: string) => coding.find((s) => s.sessionId8.startsWith(prefix));
+  const sa = resolve(idA);
+  const sb = resolve(idB);
+  if (sa === undefined || sb === undefined) {
+    process.stderr.write(`session not found: ${sa === undefined ? idA : idB}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const fa = flightFacts(sa);
+  const fb = flightFacts(sb);
+  const result = buildCompare(fa, fb);
+
+  const label = (s: string) => s.padEnd(24, ' ');
+  const lines: string[] = [];
+  lines.push('Agent Pigeon — compare');
+  lines.push('');
+  lines.push(`  ${label('')}  ${fa.sourceLabel} ${sa.sessionId8}   vs   ${fb.sourceLabel} ${sb.sessionId8}`);
+  lines.push('');
+  for (const row of result.rows) {
+    lines.push(`  ${label(row.metric)}  ${row.a}   /   ${row.b}`);
+  }
+  lines.push('');
+  for (const s of result.summaries) {
+    lines.push(`  · ${s}`);
+  }
+  lines.push('  Read-only · nothing stored or uploaded');
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function main(): void {
+  const argv = process.argv.slice(2);
+  const command = argv[0];
+
+  if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
+    printHelp();
+    return;
+  }
+  if (command === '--version' || command === '-v') {
+    process.stdout.write('agent-pigeon 0.1.0\n');
+    return;
+  }
+  if (command === 'replay') {
+    runReplay(parseReplayArgs(argv.slice(1)));
+    return;
+  }
+  if (command === 'flight') {
+    runFlight(parseFlightArgs(argv.slice(1)));
+    return;
+  }
+  if (command === 'compare') {
+    const ids = argv.slice(1);
+    runCompare(ids[0] ?? null, ids[1] ?? null);
+    return;
+  }
+  if (command === 'share') {
+    const sub = argv[1];
+    const analyzed: SessionAnalysis[] = [];
+    for (const f of discoverSessions().files) {
+      try { analyzed.push(analyzeFile(f.path, f.source)); } catch { /* skip */ }
+    }
+    const coding = codingSessions(analyzed);
+    if (sub === 'flight') {
+      const target = coding[0];
+      if (target === undefined) { process.stdout.write('no sessions\n'); return; }
+      process.stdout.write(renderFlightSvg(flightFacts(target)));
+      return;
+    }
+    if (sub === 'compare') {
+      if (coding.length < 2) { process.stdout.write('need 2 sessions\n'); return; }
+      const fa = coding[0];
+      const fb = coding[1];
+      if (fa === undefined || fb === undefined) { process.stdout.write('need 2 sessions\n'); return; }
+      process.stdout.write(renderCompareSvg(flightFacts(fa), flightFacts(fb)));
+      return;
+    }
+    process.stderr.write('share: expected flight or compare\n');
+    process.exitCode = 1;
+    return;
+  }
+  throw new Error(`unknown command: ${command} (try 'agent-pigeon --help')`);
+}
+
+try {
+  main();
+} catch (error: unknown) {
+  process.stderr.write(`agent-pigeon: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
-});
+}

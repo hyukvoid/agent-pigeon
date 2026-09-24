@@ -1,3 +1,5 @@
+> **STATUS (v0.1 release)**: the live governor described here did NOT ship. A real Claude-in-Kiro dogfood produced 0 useful warnings out of 6 (4 false positives) and v0.1 is REPLAY-ONLY. Preserved as research — see [docs/research/CLAUDE-KIRO-DOGFOOD.md](CLAUDE-KIRO-DOGFOOD.md) and the repository README.
+
 # POC-03.5.1 + POC-04A — Fingerprint Hardening & Safe Governor — Findings
 
 - Date: 2026-09-22

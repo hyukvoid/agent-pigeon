@@ -51,39 +51,87 @@ export function analyzeAttempts(attempts: ReplayAttempt[]): ReplayAnalysis {
   const verificationRuns = attempts.reduce((sum, a) => sum + a.verificationKinds.length, 0);
   const implementationCalls = attempts.reduce((sum, a) => sum + a.implementationEvents, 0);
 
-  // --- Verification debt ---------------------------------------------------
-  // (a) consecutive unverified attempts
-  for (const run of runsof(attempts, (a) => !a.evidence.verification.performed)) {
-    if (run.length < 2) continue;
-    const first = (run[0] ?? 0) + 1;
-    const last = (run[run.length - 1] ?? 0) + 1;
-    findings.push({
-      kind: 'verification-debt',
-      attemptRange: [first, last],
-      detail: `${run.length} consecutive implementation attempts without any verification run`,
-      confidence: run.length >= 3 ? 'HIGH' : 'MEDIUM',
-    });
+  // --- Verification debt (turn-based, POC-04C.2) ---------------------------
+  // Unit of evidence: the model TURN. A run of consecutive implementation
+  // turns with no verification is debt. Raw Edit/Write calls inside ONE turn
+  // are one logical attempt (a fix plus its import and type edits are not
+  // three attempts), and test-only turns are verification preparation, not
+  // implementation. Fall back to one synthetic turn per attempt for sources
+  // without turn boundaries.
+  const region: number[] = [];
+  for (let i = attempts.length - 1; i >= 0; i--) {
+    const attempt = attempts[i];
+    if (attempt === undefined || attempt.evidence.verification.performed) break;
+    region.unshift(i);
   }
-  // (b) a single window stacking many implementation calls with no verification
-  for (const attempt of attempts) {
-    if (!attempt.evidence.verification.performed && attempt.implementationEvents >= 3) {
+
+  const turnIds = new Set<string>();
+  let fallbackTurns = false;
+  for (const i of region) {
+    const attempt = attempts[i];
+    if (attempt === undefined) continue;
+    if (attempt.implTurns.length > 0) {
+      for (const t of attempt.implTurns) turnIds.add(`t${t}`);
+    } else {
+      turnIds.add(`a${i}`);
+      fallbackTurns = true;
+    }
+  }
+  const distinctTurns = turnIds.size;
+
+  // Scaffolding carve-out (POC-04C.2 dogfood): a stretch made ONLY of
+  // new-file writes has nothing runnable to verify yet. Stay silent; the
+  // activity still shows in the activity counts.
+  const regionWrites = region.reduce((sum, i) => sum + (attempts[i]?.implWrites ?? 0), 0);
+  const regionEdits = region.reduce((sum, i) => sum + (attempts[i]?.implEdits ?? 0), 0);
+  const creationOnly = regionWrites > 0 && regionEdits === 0;
+
+  if (region.length >= 1 && !creationOnly) {
+    const first = (region[0] ?? 0) + 1;
+    const last = (region[region.length - 1] ?? 0) + 1;
+    if (distinctTurns >= 3) {
       findings.push({
         kind: 'verification-debt',
-        attemptRange: [attempt.index + 1, attempt.index + 1],
-        detail: `${attempt.implementationEvents} implementation calls were made without collecting any verification evidence`,
-        confidence: attempt.implementationEvents >= 5 ? 'HIGH' : 'MEDIUM',
+        attemptRange: [first, last],
+        detail: `${distinctTurns} distinct implementation turns were made without collecting any verification evidence`,
+        confidence: distinctTurns >= 3 ? 'HIGH' : 'MEDIUM',
       });
+    } else if (distinctTurns === 2 && region.length >= 2) {
+      findings.push({
+        kind: 'verification-debt',
+        attemptRange: [first, last],
+        detail: `2 consecutive implementation attempts without any verification run`,
+        confidence: 'MEDIUM',
+      });
+    } else if (fallbackTurns && region.length === 1) {
+      // Turn-unaware source: only the old call-volume signal remains, and it
+      // is weak (POC-04C.2: many calls are usually one coherent change).
+      const attempt = attempts[region[0] ?? 0];
+      if (attempt !== undefined && attempt.implementationEvents >= 5) {
+        findings.push({
+          kind: 'verification-debt',
+          attemptRange: [first, last],
+          detail: `${attempt.implementationEvents} implementation calls were made without collecting any verification evidence`,
+          confidence: 'MEDIUM',
+        });
+      }
     }
   }
 
   // --- Dead-end exploration (failure-signature identity) -------------------
   // Consecutive attempts sharing the SAME failure signature while the code
   // kept changing. Runs are split whenever the signature changes.
-  const deadEndRuns: number[][] = [];
+  interface DeadEndRun {
+    indices: number[];
+    hash: string;
+  }
+  const deadEndRuns: DeadEndRun[] = [];
   let currentRun: number[] = [];
   let currentHash: string | null = null;
   const closeRun = (): void => {
-    if (currentRun.length >= 2) deadEndRuns.push(currentRun);
+    if (currentRun.length >= 2 && currentHash !== null) {
+      deadEndRuns.push({ indices: currentRun, hash: currentHash });
+    }
     currentRun = [];
   };
   attempts.forEach((attempt, index) => {
@@ -104,20 +152,20 @@ export function analyzeAttempts(attempts: ReplayAttempt[]): ReplayAnalysis {
 
   for (const run of deadEndRuns) {
     let allNovel = true;
-    for (let i = 1; i < run.length; i++) {
-      const prev = attempts[(run[i - 1] ?? 0)];
-      const curr = attempts[(run[i] ?? 0)];
+    for (let i = 1; i < run.indices.length; i++) {
+      const prev = attempts[(run.indices[i - 1] ?? 0)];
+      const curr = attempts[(run.indices[i] ?? 0)];
       if (prev === undefined || curr === undefined) continue;
       if (prev.evidence.code.changeSetHash === curr.evidence.code.changeSetHash) allNovel = false;
     }
     if (!allNovel) continue;
-    const first = (run[0] ?? 0) + 1;
-    const last = (run[run.length - 1] ?? 0) + 1;
+    const first = (run.indices[0] ?? 0) + 1;
+    const last = (run.indices[run.indices.length - 1] ?? 0) + 1;
     findings.push({
       kind: 'dead-end',
       attemptRange: [first, last],
-      detail: `${run.length} different patches, same failure signature ${currentHash ?? '?'}`,
-      confidence: run.length >= 3 ? 'HIGH' : 'MEDIUM',
+      detail: `${run.indices.length} different patches, same failure signature ${run.hash}`,
+      confidence: run.indices.length >= 3 ? 'HIGH' : 'MEDIUM',
     });
   }
 

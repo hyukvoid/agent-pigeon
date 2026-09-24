@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { repoRoot } from './paths.js';
 
-const POC03 = join(repoRoot, 'dist', 'src', 'poc03.js');
+const POC03 = join(repoRoot, 'dist', 'experimental', 'src', 'poc03-worker.js');
 
 function runWorker(events: unknown[]): { stdout: string; temp: string } {
   const temp = mkdtempSync(join(tmpdir(), 'pigeon-live-'));
@@ -45,7 +45,10 @@ describe('poc:03 live worker', () => {
     assert.equal(parsed.evaluation.policy, 'OBSERVE');
   });
 
-  it('flags a no-verification edit stream as verification debt', () => {
+  it('turn-unaware edit stream: stays SILENT (dogfood FP fix)', () => {
+    // 3 raw Edit events with no turn/batch boundaries: the POC-04C.2 dogfood
+    // showed such runs are usually ONE coherent change (impl + import + type
+    // fix). Precision-first: no turn-level evidence → no intervention.
     const events = [
       { ts: TS(0), sessionId: 'abcd1234', toolName: 'Edit', ok: null, fileHash: 'aaaa1111', verificationKind: null, testsFailedCount: null },
       { ts: TS(500), sessionId: 'abcd1234', toolName: 'Edit', ok: null, fileHash: 'bbbb2222', verificationKind: null, testsFailedCount: null },
@@ -54,16 +57,32 @@ describe('poc:03 live worker', () => {
     const { stdout } = runWorker(events);
     const parsed = JSON.parse(stdout) as {
       signals: { verificationDebt: string };
-      analysis: { findings: Array<{ kind: string; confidence: string }> };
+      analysis: { findings: Array<{ kind: string }> };
       policy: string;
-      evaluation: { policy: string };
     };
-    // POC-00 streak debt stays LOW (one unverified window), but the replay
-    // layer catches the stacked unverified edits and escalates the policy.
     assert.equal(parsed.signals.verificationDebt, 'LOW');
+    assert.equal(parsed.analysis.findings.filter((f) => f.kind === 'verification-debt').length, 0);
+    assert.equal(parsed.policy, 'OBSERVE', 'no turn boundaries → no intervention');
+  });
+
+  it('batch-tagged edit stream (revised live design): 3 distinct turn batches → VERIFY_FIRST once', () => {
+    // Revised live design (offline eval): PostToolBatch boundaries stamp each
+    // event with a batch ordinal, giving the live stream the same turn unit
+    // replay has.
+    const events = [
+      { ts: TS(0), sessionId: 'abcd1234', toolName: 'Edit', ok: null, fileHash: 'aaaa1111', turn: 1, verificationKind: null, testsFailedCount: null },
+      { ts: TS(600), sessionId: 'abcd1234', toolName: 'Edit', ok: null, fileHash: 'bbbb2222', turn: 2, verificationKind: null, testsFailedCount: null },
+      { ts: TS(1200), sessionId: 'abcd1234', toolName: 'Edit', ok: null, fileHash: 'cccc3333', turn: 3, verificationKind: null, testsFailedCount: null },
+    ];
+    const { stdout } = runWorker(events);
+    const parsed = JSON.parse(stdout) as {
+      analysis: { findings: Array<{ kind: string; confidence: string; detail: string }> };
+      policy: string;
+    };
     const debt = parsed.analysis.findings.find((f) => f.kind === 'verification-debt');
     assert.ok(debt);
-    assert.equal(debt.confidence, 'MEDIUM');
+    assert.equal(debt.confidence, 'HIGH');
+    assert.match(debt.detail, /3 distinct implementation turns/u);
     assert.equal(parsed.policy, 'VERIFY_FIRST');
   });
 
@@ -74,13 +93,14 @@ describe('poc:03 live worker', () => {
     const stdout = execFileSync(process.execPath, [POC03, '--events', eventsPath], { encoding: 'utf8' });
     assert.match(stdout, /POC-03/u);
     assert.ok(!stdout.includes('failed:'), 'worker must not crash on malformed lines');
+    rmSync(temp, { recursive: true, force: true });
   });
 });
 
 describe('hook hot-path behavior (contract)', () => {
   it('hook writes only sanitized fields', () => {
     // Sanity-check the shipped hook source for the privacy contract.
-    const hookSource = readFileSync(join(repoRoot, 'hooks', 'hook-posttooluse.mjs'), 'utf8');
+    const hookSource = readFileSync(join(repoRoot, 'experimental', 'hooks', 'hook-posttooluse.mjs'), 'utf8');
     assert.ok(!hookSource.includes('JEV'), 'hook must not reference Jev');
     assert.ok(!hookSource.includes('fetch('), 'hook must not do network I/O');
     assert.match(hookSource, /digest\('hex'\)\.slice\(0, 32\)/u, 'fingerprints stored as 128-bit digests only');

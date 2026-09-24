@@ -13,9 +13,9 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { pigeonHome } from './replay/secret.js';
-import { computeGovernorDecision } from './governor/governor.js';
-import type { GovernorEvent, GovernorState } from './governor/governor.js';
+import { pigeonHome } from '../../src/replay/secret.js';
+import { computeGovernorDecision } from '../../src/governor/governor.js';
+import type { GovernorEvent, GovernorState } from '../../src/governor/governor.js';
 
 function main(): void {
   const argv = process.argv.slice(2);

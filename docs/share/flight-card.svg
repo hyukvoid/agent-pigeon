@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="300" viewBox="0 0 560 300">
+<rect width="560" height="300" rx="8" fill="#1a1a2e"/>
+<text x="24" y="32" font-family="monospace" font-size="15" fill="#82aaff" font-weight="bold">🐦 Agent Pigeon — Flight Report</text>
+<text x="24" y="52" font-family="monospace" font-size="11" fill="#8888aa" font-weight="normal">Codex · session 019f2132 · span 63 min</text>
+<text x="24" y="101" font-family="monospace" font-size="11" fill="#8888aa" font-weight="normal">EDIT</text>
+<rect x="74" y="90" width="462" height="14" rx="2" fill="#2a2a4a"/><rect x="74" y="90" width="462" height="14" rx="2" fill="#82aaff"/><text x="542" y="101" font-family="monospace" font-size="11" fill="#e0e0e0">40</text>
+<text x="24" y="127" font-family="monospace" font-size="11" fill="#8888aa" font-weight="normal">VERIFY</text>
+<rect x="74" y="116" width="462" height="14" rx="2" fill="#2a2a4a"/><rect x="74" y="116" width="162" height="14" rx="2" fill="#7ee787"/><text x="542" y="127" font-family="monospace" font-size="11" fill="#e0e0e0">14</text>
+<text x="24" y="153" font-family="monospace" font-size="11" fill="#8888aa" font-weight="normal">FAIL→PASS</text>
+<rect x="84" y="142" width="462" height="14" rx="2" fill="#2a2a4a"/><rect x="84" y="142" width="81" height="14" rx="2" fill="#f97583"/><text x="552" y="153" font-family="monospace" font-size="11" fill="#e0e0e0">7</text>
+<text x="24" y="286" font-family="monospace" font-size="10" fill="#8888aa" font-weight="normal">Local · Read-only · Nothing uploaded</text>
+<text x="24" y="268" font-family="monospace" font-size="11" fill="#8888aa" font-weight="normal">Agent Pigeon · proof-of-progress for coding agents</text>
+</svg>
