@@ -1,20 +1,24 @@
-# Agent Pigeon
+# Agent Pigeon 🐦
 
-**See how your coding agent actually worked.**
+> See how your coding agent actually worked.
+
+A tiny local CLI that turns your **Claude Code / Codex** sessions into a
+flight report: edits, verification runs, FAIL→PASS loops, and session
+comparisons.
 
 ```bash
 $ agent-pigeon flight
 
 🐦 Agent Pigeon — Codex
-  63 min · 1 session
+  Session span: 63 min · 1 session
 
-  READ                          0
+  READ      —                   N/A
   EDIT      ██████████████████  40
   VERIFY    ██████              14
   FAIL→PASS ███                 7
 
 🔁 Biggest debugging loop
-   FAIL → edit → FAIL → edit → PASS
+   FAIL → edit → FAIL → edit → FAIL → edit → FAIL → edit → PASS → edit → FAIL → edit → PASS
 
 Final state
    ✓ recognized verification found
@@ -22,83 +26,125 @@ Final state
 Local · Read-only · Nothing uploaded
 ```
 
-## Why
+Local, read-only, no API key, nothing uploaded.
 
-Coding agents produce enormous amounts of activity. Activity is not progress.
-The cheapest question you can ask about an agent session is:
+## Why Agent Pigeon?
 
-> after the code changed, did anything ever run that could prove the change worked?
+Coding agents produce a lot of activity. Activity is not the same as work you
+can check. Agent Pigeon reads the session history you already have on disk
+and answers cheap, factual questions:
 
-Agent Pigeon answers it from your existing session history — no configuration,
-no API keys, no cloud.
+- how much did the agent read, edit, and actually run?
+- did verification ever fail and then pass (a real FAIL→PASS debugging loop)?
+- what did the end of the session look like?
+- how do two sessions compare, side by side?
 
-## Compare two sessions
+No cloud, no API key, no configuration — and it never writes to your
+history.
+
+## Flight
+
+`agent-pigeon flight` inspects **one session** (the most recent coding
+session by default) and prints the report above.
+
+- **READ / EDIT / VERIFY bars** — reads, code changes, and *recognized
+  verification* (build / test / device commands Agent Pigeon can identify).
+- **FAIL→PASS** — the biggest debugging loop: fail, edit, fail, … pass.
+- **Most touched file** — where the work concentrated.
+- **Longest coding streak** — changes with no recognized verification in
+  between. A prompt to inspect, not a verdict.
+- **Final state** — whether the last recognized verification passed.
 
 ```bash
-$ agent-pigeon compare <sessionA> <sessionB>
+agent-pigeon flight --session 019f2132   # pick a session by id prefix
+agent-pigeon flight --json               # machine-readable facts
+```
 
-                        Claude Code 415efbff   vs   Codex 019f2132
+### Replay — broader history
 
-  Session span              8 min   /   63 min
-  EDIT                      11   /   40
-  Recognized verification   0   /   14
-  READ (attributed)         8   /   N/A
+`agent-pigeon replay` runs the same analysis across **all** your local
+sessions and reports corpus-wide counts, unverified implementation
+stretches, and recognized FAIL→PASS loops. `--source claude|codex|all`,
+`--json`.
 
-  · Codex ran more recognized verification (14 vs 0).
+```bash
+$ agent-pigeon replay
+
+Agent Pigeon — replay
+
+  History scanned               428 sessions
+  Sessions with code changes    99
+  Implementation attempts       456
+  Implementation changes        4,643
+  Recognized verification runs  649
+
+Unverified implementation stretches — 13
+  Stretches where the agent changed code across 3+ separate turns
+  without any recognized verification (build / test / device run).
+  · codex session 01a06cb2 · 26 turns · high confidence
+  … and 8 more (--json for the full list)
+
+Recognized verification loops — 3
+  Verification failed, then passed. Healthy debugging — no warnings for these.
+```
+
+## Compare
+
+`agent-pigeon compare <sessionA> <sessionB>` puts two sessions side by
+side — factual counts only, no scores and no winner.
+
+```bash
+$ agent-pigeon compare 019f2132 01a0cddb
+
+                            Codex 019f2132   vs   Codex 01a0cddb
+
+  Session span              63 min   /   4 h 26 min
+  EDIT                      40   /   4
+  Recognized verification   14   /   33
+  FAIL→PASS shape           FAIL ×4 → edit → PASS → edit → FAIL → edit → PASS   /   —
+  Most touched file         —   /   —
+  READ (attributed)         N/A   /   N/A
+
+  · Codex ran more recognized verification (33 vs 14).
+  · Codex made more implementation edits (40 vs 4).
   Read-only · nothing stored or uploaded
 ```
 
-Factual side-by-side counts — no scores, no winner, no AI judgment.
+Claude Code and Codex sessions can be compared against each other the same
+way.
 
-## Share a card
+## Share
 
-```bash
-$ agent-pigeon share flight > flight.svg
-$ agent-pigeon share compare > compare.svg
-```
-
-Prints a self-contained SVG card of the same report to stdout. Deterministic,
-local, no network, no external fonts — the file contains only aggregate
-counts, short session IDs, and display-safe file names.
-
-## Install & run
-
-Requires Node ≥ 20.11.
-Validated on **Windows 11** and **Linux (Debian 12, Node 20, Docker, offline)**.
-macOS is untested.
+`agent-pigeon share` prints a self-contained SVG card of the same report to
+stdout. Deterministic, local, no network, no external fonts — the file holds
+only aggregate counts, short session ids, and display-safe file names.
 
 ```bash
-git clone https://github.com/hyukvoid/agent-pigeon && cd agent-pigeon
-npm install                       # builds automatically
-npx agent-pigeon flight           # flight report for your most recent session
-npx agent-pigeon replay           # …or the full multi-session verification report
-npx agent-pigeon compare <A> <B>  # side-by-side counts for two sessions
-npx agent-pigeon share flight     # SVG card of the report, on stdout
+agent-pigeon share flight  > flight.svg
+agent-pigeon share compare > compare.svg
 ```
 
-Options: `--session <id-prefix>` (pick a session) · `--source claude|codex|all` ·
-`--json` · `--claude-dir` / `--codex-dir` to override history locations.
+![Agent Pigeon flight card](docs/share/flight-card.svg)
 
-## What it shows
+## Install
 
-- **READ / EDIT / VERIFY bars** — how much reading, code changing, and
-  recognized verifying happened.
-- **Debugging loop** — the FAIL → edit → FAIL → … → PASS shape of real
-  fix-and-verify work.
-- **Unverified implementation stretches** — 3+ separate model turns of code
-  changes with **no recognized verification** in between. Prompts to inspect,
-  not verdicts: Agent Pigeon does not know your project's definition of proof.
-- **Recognized verification loops** — verification failed, then passed:
-  healthy debugging, reported so the distinction is deliberate.
+Requires **Node.js ≥ 20.11**. No repository clone needed.
 
-## What replay adds
+```bash
+npx agent-pigeon flight
+```
 
-`agent-pigeon replay` runs the same pipeline across **all** your local
-sessions and reports corpus-wide activity, unverified implementation
-stretches, and healthy fail→pass verification loops. `--json` for
-automation.
+or install it once and keep the command on your PATH:
 
-## What it inspects
+```bash
+npm install -g agent-pigeon
+agent-pigeon flight
+```
+
+**Platforms:** tested on **Windows 11** and **Linux (Debian 12, Node 20,
+Docker)**. **macOS is untested.**
+
+## Supported agents
 
 | History | Status in v0.1 |
 | --- | --- |
@@ -106,27 +152,41 @@ automation.
 | Codex (`~/.codex/sessions`, rollout JSONL) | **parsed** |
 | Kiro / other agents / other formats | not parsed |
 
-Only these directories are read, read-only. Your projects' source code is
-not read.
+Only those directories are read, and only read-only. Your projects' source
+code is never read.
 
 ## Privacy
 
-- **Reads:** only the history directories above, read-only.
-- **Persists:** nothing. Flight, replay, compare, and share write no files,
-  create no state, keep no cache (redirect `share` output yourself if you
-  want to keep a card).
+- **Reads:** the history directories above, read-only.
+- **Persists:** nothing. Flight, replay, compare, and share create no files,
+  no state, no cache (redirect `share` output yourself to keep a card).
 - **Transmits:** nothing. There is no network code in any command.
-- **Output:** aggregate counts and short session identifiers. No source
+- **Output:** aggregate counts and short session identifiers — no source
   code, no diffs, no commands, no prompts.
+- **No API key.** Everything runs on your machine.
 
-## Experimental / research
+## Limitations
 
-A live VERIFY_FIRST governor (a hook that would remind the agent mid-session)
-was built and dogfooded, then **intentionally withheld from v0.1**: in a real
-dogfood its warnings were not useful enough (it could not recognize all forms
-of verification, producing false positives). The code and the full research
-history are preserved under `experimental/`, `docs/research/` and the POC
-reports in this repository. See [docs/research/SUMMARY.md](docs/research/SUMMARY.md).
+- **Recognized verification** means build / test / device commands Agent
+  Pigeon can identify. Project-specific checks (custom scripts, smoke runs)
+  may be invisible.
+- Reports are **prompts to inspect, not verdicts**. Agent Pigeon does not
+  know your project's definition of proof, and deliberately produces no
+  scores, grades, or rankings of sessions, agents, or models.
+- Streak and stretch thresholds (3+ turns/changes) are heuristics, not
+  guarantees about a session.
+- Session ids are shortened to 8 characters; long sessions show a wall-clock
+  *span* (`*` marks spans that include gaps).
+- macOS is untested.
+
+## Research / history
+
+The path to v0.1 — including a live VERIFY_FIRST governor that was built,
+dogfooded, and **deliberately withheld** because its warnings were not useful
+enough — is documented in
+[docs/research/SUMMARY.md](docs/research/SUMMARY.md)
+(experimental code lives under `experimental/`, not in the npm package).
+Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
