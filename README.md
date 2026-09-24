@@ -164,6 +164,8 @@ code is never read.
 - **Output:** aggregate counts and short session identifiers — no source
   code, no diffs, no commands, no prompts.
 - **No API key.** Everything runs on your machine.
+- **Independent.** Agent Pigeon is an independent local CLI. It does not
+  require or configure PigeonHub.
 
 ## Limitations
 
