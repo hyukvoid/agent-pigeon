@@ -112,5 +112,3 @@ At POC-04B start, HEAD had been externally moved to `main` (bootstrap) and a `po
 ## 14. Recommendation
 
 **HOLD → collect more real data.** The corpus proves debt detection on real history and yields one confirmed real dead-end, but contains zero real productive windows and zero mobile-specific candidates — insufficient to (a) satisfy the RETHINK gate's discrimination clause against real productive data, or (b) demonstrate mobile value. Concrete collection targets: sessions with repeated verification runs (the current corpus is dominated by zero-verification agent runs), ideally mobile/Android sessions using gradle/adb/agent-device. RETHINK stays disabled until ≥1 more confirmed dead-end AND ≥1 real productive window exist to prove discrimination.
-
-**STOP. RETHINK not implemented. Awaiting user review.**

@@ -207,7 +207,7 @@ Privacy checks on this payload are enforced by `payloadSafetyIssues()` + tests: 
 1. **Windows/Node runner quirk**: `node --test <dir>` fails here (treated as a module); the test script uses the runner's glob form `"dist/test/**/*.test.js"` instead.
 2. **Crash-line regex bug caught by tests**: the first version required a dot-delimited prefix before `Exception`, so `java.lang.NullPointerException` never matched (the class name runs into `Exception` without a dot). Rewrote the token extraction; logcat-prefixed (`at …`) frames are now handled too.
 3. **Fixture path resolution** had to be relative to the compiled module (`dist/src/…`), not the cwd.
-4. **`gh` CLI is not installed** on this machine, so the GitHub remote (`hyukvoid/agent-pigeon`, private) could **not** be created automatically. The repo is local-only; to publish: create the private repo on GitHub, then `git remote add origin … && git push -u origin main poc/00-proof-of-progress`.
+4. **`gh` CLI is not installed** on this machine, so the GitHub remote (`hyukvoid/agent-pigeon`, private) could **not** be created automatically. The repo is local-only.
 5. A pre-POC skeleton from an earlier session (a broader transcript-funnel design) was found in the working tree; it is preserved untouched on branch `archive/pre-poc-skeleton` and POC-00 was implemented fresh to the spec's schema.
 
 ## 10. POC-01 recommendation
@@ -218,5 +218,3 @@ Recommended POC-01 inputs, in order:
 1. One live capture loop: agent-device `logs start/stop` + `snapshot --diff` around a real attempt on an emulator, replacing representative fixtures with recorded truth.
 2. Gradle build/test output ingestion so `build.status` / `tests.failedCount` come from real tool output (the only fixture-supplied fields left).
 3. A real Jev call (needs an API key) to measure actual latency/tokens and to calibrate the three probabilities against the deterministic signals.
-
-**Stopped here per §17 — awaiting user approval before any further implementation.**

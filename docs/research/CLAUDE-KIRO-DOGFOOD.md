@@ -155,7 +155,7 @@ the classifier matched underlying tools (`tsc`, `jest`) and not the scripts
 repositories actually run. This project's own fast check, `npm run typecheck`,
 was classified `other`. The live governor shares this classifier, so the same
 27% blind spot was feeding the live trigger. It also means the `28 debt windows`
-headline in `V0.1-RC.md` was computed with the blind classifier and needs a
+headline was computed with the blind classifier and needs a
 re-baseline (one of those 28 was a false positive; one real productive loop was
 missed).
 
@@ -247,7 +247,7 @@ positives, not new information. Make the two qualifications above (batch
 persistence, path-aware classification), then re-run exactly the five episodes
 in this report as a fixture-backed regression: the target is 0 of 6 firing.
 
-Separately and independently, re-baseline the replay numbers in `V0.1-RC.md`
+Separately and independently, re-baseline the v0.1-RC-era replay numbers
 against the fixed classifier. Replay is the stronger half of this product and
 its headline figures just moved.
 

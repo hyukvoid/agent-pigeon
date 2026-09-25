@@ -43,7 +43,7 @@ A bare 32-bit digest does **not** protect against reconstruction by candidate ma
 ## PART B — Git backup
 
 - Remote: **NOT CONFIGURED — cannot be configured safely.** Findings: no `gh` CLI; credential helper `manager` and an SSH key exist, but `git ls-remote https://github.com/hyukvoid/agent-pigeon.git` → *Repository not found*, and SSH → *Permission denied (publickey)*. The repo owner cannot be verified from this machine, so per instructions **no repository was created under any account**.
-- **OPERATIONAL RISK (flagged): all POC work currently exists only on this machine.** If this disk dies, POC-00–04A history is lost. Recommended user action: create the private repo under the intended owner, then `git remote add origin <url> && git push -u origin main poc/00-proof-of-progress poc/01-real-mobile-evidence poc/02-real-session-replay poc/03-live-observe poc/035-reality-gate poc/04a-safe-governor`.
+- **OPERATIONAL RISK (flagged): all POC work currently exists only on this machine.** If this disk dies, POC-00–04A history is lost.
 
 ## PART C — POC-04A Safe Governor
 
@@ -135,5 +135,3 @@ No condition hit: novelty does not require storing raw source; goalProgress sepa
 - `feat: POC-04A safe governor (VERIFY_FIRST once per debt episode, anti-spam)`
 - `test: governor scenarios A-F and hardened fingerprint contracts`
 - `docs: record POC-03.5.1 + POC-04A findings; correct fingerprint privacy claim in POC-03.5`
-
-**STOP. POC-04B not implemented. Awaiting user review.**

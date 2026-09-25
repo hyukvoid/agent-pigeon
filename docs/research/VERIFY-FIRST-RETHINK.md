@@ -137,5 +137,3 @@ RETHINK: **KEEP DISABLED** (this sprint retracted the only real dead-end evidenc
 showed the platform's output identity is unreliable). Jev: stays out of the MVP.
 events.jsonl growth: recommendation only — size-cap rotation (~10 MB, keep newest) at the
 next live change; not needed while live is experimental.
-
-**STOP. No new live policy implemented. No publish, no tag. Awaiting user review.**

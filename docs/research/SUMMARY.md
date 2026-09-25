@@ -19,10 +19,8 @@ affected document carries a correction banner where applicable.
 | [POC-04C.md](POC-04C.md) | Codex inner-tool parsing (×21 attempts); direction decision |
 | [VERIFY-FIRST-RETHINK.md](VERIFY-FIRST-RETHINK.md) | Turn-based debt unit; controlled FP evaluation |
 | [CLAUDE-KIRO-DOGFOOD.md](CLAUDE-KIRO-DOGFOOD.md) | The real live dogfood: 6 warnings, 0 useful, 4 false positives, 2 annoying — why live is not in v0.1 |
-| [LIVE-VERIFY-FIRST-FINAL-GATE.md](LIVE-VERIFY-FIRST-FINAL-GATE.md) | Final live gate (watermark policy) — replay-only recommendation |
+| [LIVE-VERIFY-FINDINGS.md](LIVE-VERIFY-FINDINGS.md) | Live VERIFY_FIRST dogfood findings — watermark policy, false positives, why live stayed experimental |
 | [FINAL-REPORT.md](FINAL-REPORT.md) | POC-01–03 consolidated report (pre-replay-only) |
-| [V0.1-RC.md](V0.1-RC.md) | Superseded v0.1-RC (contained the live governor; see instead the repository README) |
-| [CHANGELOG-0.1.0-draft.md](CHANGELOG-0.1.0-draft.md) | Draft changelog from the RC iteration (live references are historical) |
 
 ## Current state
 

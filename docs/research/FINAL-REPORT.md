@@ -69,7 +69,7 @@ POC-03의 BLOCKED는 환경 제약이지 가설 실패가 아님 (지시문 기�
   - `poc/02-real-session-replay` → `848a646`
   - `poc/03-live-observe` → `db54aec` (main 대비 16 commits)
   - `archive/pre-poc-skeleton` — POC 이전 발견 skeleton 보존
-- **Remote push**: 미수행 — 이 머신에 `gh` CLI가 없고 원격이 설정되지 않음 (POC-00부터 동일 사유 기록). 발행 시: private repo 생성 후 `git push -u origin main poc/00-... poc/01-... poc/02-... poc/03-...`.
+- **Remote push**: 미수행 — 이 머신에 `gh` CLI가 없고 원격이 설정되지 않음 (POC-00부터 동일 사유 기록).
 - 최종 상태: working tree clean, clean build + **43/43 tests pass** (POC-00 회귀 포함).
 
 ## Biggest Problems

@@ -61,7 +61,7 @@ Attempt-start gaps in the audited sessions range 27 s – 26 min; the old "16-da
 
 ## Evidence ledger (ORGANIC / CONTROLLED / SYNTHETIC)
 
-- **ORGANIC** (real history): 367 sessions scanned; 73 usable; 297 attempts; 4,560 implementation calls; 399 verification events; 2 productive windows; 28 debt windows; 0 dead-end windows; 0 false positives after hardening.
+- **ORGANIC** (real history): 367 sessions scanned; 73 usable; 297 attempts; 4,560 implementation calls; 399 verification events; 2 productive windows; 28 debt windows; 0 dead-end windows; 0 false positives after hardening. Full replay of this corpus (367 sessions, 1.2 GB) took ~11 s.
 - **CONTROLLED**: none created this sprint (prior controlled evidence: POC-01 emulator REAL A/B/C).
 - **SYNTHETIC**: Codex rollout unit fixture (interface tests only — counts as zero product validation).
 
@@ -94,5 +94,3 @@ Evidence: the organic corpus is general-coding-dominant (that is where the 28 de
 ## Next action
 
 **GO — prepare v0.1 around the existing verified capability**: replay (`poc:02`/`poc:04b` corpus mining) + the VERIFY_FIRST governor (observe → deterministic decision → once-per-episode factual warning), general-core with mobile as flagship adapter, Jev removed from the MVP path. RETHINK stays disabled pending the data collection defined in HOLD items (more verification-rich sessions; mobile sessions; episode-gap metadata).
-
-**STOP. Awaiting user review.**

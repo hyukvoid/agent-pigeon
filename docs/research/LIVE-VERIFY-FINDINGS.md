@@ -1,16 +1,18 @@
-# Final Live VERIFY_FIRST Dogfood Gate — Report
+# Live VERIFY_FIRST dogfood — findings
 
 - Date: 2026-09-23
-- Branch: `poc/live-dogfood-gate`
-- Role: I (the Claude model in this coding environment) acted as the coding agent; the
-  experimental live governor (`hooks/governor-live.mjs` — watermark opportunity policy)
-  and the real observer hook (`hooks/hook-posttooluse.mjs`) evaluated my actual tool
-  batches through their real code paths.
+- Method: Claude (in this coding environment) acted as the coding agent on real
+  tasks; the experimental live governor (`hooks/governor-live.mjs` — watermark
+  opportunity policy) and the real observer hook (`hooks/hook-posttooluse.mjs`)
+  evaluated the actual tool batches through their real code paths.
 - Evidence labels used below:
-  - **CLAUDE_MODEL_BEHAVIOR** — what I actually did as the agent and my judgments.
+  - **CLAUDE_MODEL_BEHAVIOR** — what the agent actually did and judged.
   - **LIVE_POLICY_ENGINE** — the real hook scripts' outputs on those events.
-  - **CLAUDE_CODE_HOOK_TRANSPORT** — simulated: the harness invokes the hooks with
-    Claude-Code-shaped stdin instead of Claude Code doing it.
+  - **CLAUDE_CODE_HOOK_TRANSPORT** — simulated: the harness invokes the hooks
+    with Claude-Code-shaped stdin instead of Claude Code doing it.
+
+The dogfood answers two questions: is the watermark policy's event attribution
+trustworthy, and does the resulting warning ever actually help?
 
 ## Boundary mechanism chosen
 
@@ -27,7 +29,7 @@
     factual `additionalContext` VERIFY_FIRST reminder (latched until the next
     verification).
 
-**Why this is trustworthy (§2 answer):** no event is ever *assigned* to a batch, so the
+**Why this is trustworthy:** no event is ever *assigned* to a batch, so the
 async/sync race cannot misattribute. A late async event is consumed by the NEXT boundary —
 worst case a warning moves one batch later, which is bounded; the watermark guarantees no
 event is counted twice or skipped; concurrent observer appends can at worst corrupt one
@@ -35,14 +37,14 @@ line, which the parser skips (evidence loss reduces warnings — fail-safe direc
 Verified: watermark unchanged across empty boundaries; truncated final lines are not
 consumed until complete; rotation/truncation resets cleanly.
 
-## Experimental policy (behavior, §4)
+## Experimental policy
 
 "Count *repeated opportunities to verify* that the agent let pass, not raw edits." One
 boundary that consumed 4 edits (impl + import fix + type fix + regression test) = ONE
 opportunity. Three boundaries that each consumed edits with no verification event in
 between = 3 opportunities → warn once.
 
-## Claude dogfood tasks (CLAUDE_MODEL_BEHAVIOR)
+## Dogfood tasks (CLAUDE_MODEL_BEHAVIOR)
 
 Real work in three scratch projects, chosen before running, executed in order:
 
@@ -65,7 +67,7 @@ first try → A4 further edit (latched, silent ✓) → A5 generic `node -e` ver
 **not recognized** (same classifier gap as C3) → A6 wrote a regression test (neutral ✓) →
 A7 `node --test` PASS (reset ✓).
 
-## Actual intervention events and verdicts
+## Intervention events and verdicts
 
 | Warning | Where | CLAUDE_MODEL_BEHAVIOR verdict | Root cause |
 | --- | --- | --- | --- |
@@ -94,7 +96,7 @@ Verified live: verification (pass OR fail) resets the episode and clears the lat
 warning fires exactly once per episode; a post-warning implementation batch stays silent;
 a second debt episode after verification fires again once. Exactly-once semantics held.
 
-## Attribution / concurrency findings (§2)
+## Attribution / concurrency findings
 
 The watermark design resolves the async question structurally: no event→batch assignment
 exists, late events are consumed at the next boundary (bounded one-batch delay), and the
@@ -106,13 +108,13 @@ One transport-layer caveat (CLAUDE_CODE_HOOK_TRANSPORT): concurrent observer app
 in principle interleave lines; the parser skips corrupt lines, so the effect is rare
 evidence loss (fewer warnings), never wrong evidence.
 
-## events.jsonl growth (§10)
+## events.jsonl growth
 
-Dogfood scale: 16 events ≈ 4 KB total (~256 B/batch). Not a release blocker at this scale.
+Dogfood scale: 16 events ≈ 4 KB total (~256 B/batch). Not a concern at this scale.
 Smallest safe design if live ships: rotate at 5 MB to `events.1.jsonl` (keep one), reset
 the watermark on rotation — proposed only.
 
-## Corpus numbers (§11 — corrected classifier, current pipeline)
+## Corpus numbers (corrected classifier, current pipeline)
 
 400 files scanned · 93 usable sessions · 441 attempts · 4,587 implementation calls ·
 **588 verification events** (+~200 recovered by the npm-indirection fix) · 3 productive
@@ -120,7 +122,7 @@ windows · debt expressed in **distinct implementation turns** (windows of 3–2
 confirmed) · **0 dead-end windows** (the POC-04B one stands retracted). Token-window
 numbers: excluded as unreliable.
 
-## Hard success bar — verdict
+## Results against the pre-declared success criteria
 
 | Requirement | Result |
 | --- | --- |
@@ -133,7 +135,8 @@ numbers: excluded as unreliable.
 | Attribution survives concurrency | MET (watermark design) |
 | Agent remains fail-open | MET |
 
-**The gate is NOT passed → REPLAY-ONLY v0.1.**
+**Result: the criteria were not met. The live governor stayed out of the release —
+v0.1 shipped replay-only.**
 
 ## Strongest evidence FOR a live governor
 
@@ -147,11 +150,10 @@ run recognizable and the warning disappear).
 
 The only live usefulness instance was inconclusive (no defect found), while the FP class
 that did appear (unrecognized verification) cannot be fixed conservatively without a
-project-configuration contract that does not exist yet. A v0.1 that ships a live hook
-whose main observable behavior is "occasionally nags during legitimate refactoring" risks
-the install being removed — the exact outcome the dogfood gate exists to prevent. Replay
-delivers the same core insight (28→re-validated debt windows in the wild) with zero
-interruption risk.
+project-configuration contract that does not exist yet. A live hook whose main observable
+behavior is "occasionally nags during legitimate refactoring" risks the install being
+removed — the exact outcome this dogfood exists to prevent. Replay delivers the same core
+insight (re-validated debt windows in the wild) with zero interruption risk.
 
 ## Remaining unknowns
 
@@ -162,17 +164,15 @@ interruption risk.
 - Outcome-identity mining needs a clean-output corpus (non-Windows Codex or Claude
   transcripts) before RETHINK can ever be reconsidered.
 
-## v0.1 recommendation (exactly one)
+## Outcome and current status
 
-**REPLAY-ONLY v0.1.**
+v0.1 shipped as `agent-pigeon replay` (turn-aware, corrected classifier, turn-based debt
+report) plus README/trust docs — the validated, useful, zero-risk part.
 
-- Ship: `agent-pigeon replay` (turn-aware, corrected classifier, turn-based debt report)
-  + README/trust docs. This is validated, useful, zero-risk.
-- The live governor (`init`/observer/batch hooks) moves to `experimental/` with a
-  documented "requires verification-contract support + one clean dogfood" gate. All of its
-  engineering (watermark policy, anti-spam, fail-open, race-safe secrets) is preserved and
-  tested — dropping it from the *product surface* is not dropping the work.
-- Retracted/unknown evidence (dead-ends, token burn per window, live behavior change)
+- The live governor (observer + batch hooks) moved to `experimental/`, with two
+  documented preconditions before any future live attempt: verification-contract support
+  (`.agent-pigeon.json`) and one clean dogfood run. Its engineering — watermark policy,
+  anti-spam, fail-open, race-safe secrets — is preserved and tested; excluding it from
+  the product surface did not discard the work.
+- Retracted or unknown evidence (dead-ends, token burn per window, live behavior change)
   stays out of all product claims.
-
-**STOP. No publish, no tag, no public repo change, no RETHINK. Awaiting user review.**
