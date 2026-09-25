@@ -110,4 +110,4 @@ Re-replayed with content fingerprints (Claude first):
 
 **GO → POC-04** — with preconditions unchanged and sharpened: (1) obtain a Jev key and run the defined ambiguous-case test set before POC-04 ships any semantic surface; (2) activate `async: true` in the live configuration and measure the real in-agent delta when quota returns.
 
-**Stopped here per §15. No nudge, no context injection, no Stop blocking, no notification, no PigeonHub, no dashboard, no iOS, no Codex live, no binary hook rewrite.**
+**No nudge, no context injection, no Stop blocking, no notification, no PigeonHub, no dashboard, no iOS, no Codex live, no binary hook rewrite.**

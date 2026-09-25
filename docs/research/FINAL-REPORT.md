@@ -104,8 +104,7 @@ POC-03의 BLOCKED는 환경 제약이지 가설 실패가 아님 (지시문 기�
 
 1. Claude Code quota/키 확립 → POC-03 live leg 완주 (실세션 부하 실측) + Jev 실측 (최대 3회).
 2. hook을 컴파일드 바이너리(또는 동등한 저비용 형태)로 교체해 p50 < 10 ms 달성 후 intervention 설계 착수.
-3. POC-04 착수 전 본 보고서에 대한 사용자 승인 필요 (절대 STOP 조건 준수).
 
 ---
 
-**POC-03 이후 구현을 멈췄습니다. POC-04 (intervention/nudge), dashboard, PigeonHub, 알림, iOS, Codex live 등은 시작하지 않았습니다. 사용자 승인을 기다립니다.**
+**POC-03 이후 구현을 멈췄습니다. POC-04 (intervention/nudge), dashboard, PigeonHub, 알림, iOS, Codex live 등은 시작하지 않았습니다.**
