@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 — version output hotfix
+
+- Fixed `--version` reporting the previous package version.
+- No analysis, privacy, or report behavior changes.
+
 ## 0.1.1 — branding polish
 
 - Added the Agent Pigeon pixel-art mascot, compact terminal dot pigeon, and refreshed README.

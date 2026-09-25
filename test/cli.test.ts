@@ -42,6 +42,13 @@ describe('agent-pigeon CLI (public v0.1)', () => {
     assert.doesNotMatch(stdout, /init|remove|governor|VERIFY_FIRST/u);
   });
 
+  it('--version matches package.json', () => {
+    const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { version: string };
+    const { stdout, status } = runCli(['--version']);
+    assert.equal(status, 0);
+    assert.equal(stdout.trim(), `agent-pigeon ${pkg.version}`);
+  });
+
   it('unknown/experimental commands are rejected', () => {
     for (const cmd of ['init', 'remove', 'governor', 'nonsense']) {
       assert.equal(runCli([cmd]).status, 1, `${cmd} must not be a public command`);

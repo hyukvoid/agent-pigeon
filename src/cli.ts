@@ -289,7 +289,7 @@ function main(): void {
     return;
   }
   if (command === '--version' || command === '-v') {
-    process.stdout.write('agent-pigeon 0.1.0\n');
+    process.stdout.write('agent-pigeon 0.1.2\n');
     return;
   }
   if (command === 'replay') {
