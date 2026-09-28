@@ -22,6 +22,8 @@ import type { SessionAnalysis } from './replay/corpus.js';
 import { DOT_PIGEON, flightFacts, renderFlight, codingSessions, parseFlightArgs } from './flight.js';
 import { buildCompare } from './compare.js';
 import { renderFlightSvg, renderCompareSvg } from './share.js';
+import { loadSessionModel } from './adapters/index.js';
+import { renderSessionOverview, renderSessionJson } from './session.js';
 
 function humanCount(n: number): string {
   return n.toLocaleString('en-US');
@@ -36,6 +38,8 @@ Usage:
                                     coding session (read-only)
   agent-pigeon compare <A> <B>      Side-by-side comparison of two sessions
   agent-pigeon replay [options]     Analyze all local agent history
+  agent-pigeon session <file>       Flight recorder overview for one session
+                                    file (pigeon.jsonl, Codex, Claude Code)
   agent-pigeon share flight         SVG card for a session, printed to stdout
   agent-pigeon share compare        SVG card comparing two sessions, to stdout
   agent-pigeon --help               Show this help
@@ -298,6 +302,23 @@ function main(): void {
   }
   if (command === 'flight') {
     runFlight(parseFlightArgs(argv.slice(1)));
+    return;
+  }
+  if (command === 'session') {
+    const file = argv[1];
+    const json = argv.includes('--json');
+    if (file === undefined) {
+      process.stderr.write('usage: agent-pigeon session <file.jsonl> [--json]\n');
+      process.exitCode = 1;
+      return;
+    }
+    const model = loadSessionModel(file);
+    if (model === null) {
+      process.stderr.write(`agent-pigeon: no readable session found in ${file}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(json ? renderSessionJson(model) : renderSessionOverview(model) + '\n');
     return;
   }
   if (command === 'compare') {
