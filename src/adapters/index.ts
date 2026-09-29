@@ -63,6 +63,56 @@ export const ADAPTERS: AdapterInfo[] = [
   },
 ];
 
+/**
+ * What each adapter can honestly prove from its source format. The UI must
+ * never claim more than this matrix allows — e.g. no adapter here has an
+ * explicit completion record for Claude Code, so the radar may show
+ * "idle 7m" for a Claude session but never "DONE".
+ */
+export const ADAPTER_CAPABILITIES: Record<string, {
+  liveActivity: 'YES' | 'PARTIAL' | 'EXPERIMENTAL' | 'NO';
+  explicitCompletion: 'YES' | 'NO' | 'UNKNOWN';
+  testOutcomes: 'YES' | 'PARTIAL' | 'NO';
+  fileEvents: 'YES' | 'PARTIAL' | 'NO';
+  subagents: 'YES' | 'PARTIAL' | 'NO' | 'UNKNOWN';
+}> = {
+  'generic-jsonl': {
+    liveActivity: 'YES',
+    explicitCompletion: 'YES',
+    testOutcomes: 'YES',
+    fileEvents: 'YES',
+    subagents: 'YES',
+  },
+  codex: {
+    liveActivity: 'YES',
+    explicitCompletion: 'UNKNOWN',
+    testOutcomes: 'YES',
+    fileEvents: 'YES',
+    subagents: 'NO',
+  },
+  claude: {
+    liveActivity: 'PARTIAL',
+    explicitCompletion: 'NO',
+    testOutcomes: 'YES',
+    fileEvents: 'YES',
+    subagents: 'PARTIAL',
+  },
+  zcode: {
+    liveActivity: 'EXPERIMENTAL',
+    explicitCompletion: 'UNKNOWN',
+    testOutcomes: 'PARTIAL',
+    fileEvents: 'YES',
+    subagents: 'PARTIAL',
+  },
+  opencode: {
+    liveActivity: 'NO',
+    explicitCompletion: 'UNKNOWN',
+    testOutcomes: 'NO',
+    fileEvents: 'NO',
+    subagents: 'UNKNOWN',
+  },
+};
+
 export type DetectedAdapter = 'generic-jsonl' | 'codex' | 'claude' | 'zcode' | null;
 
 /**

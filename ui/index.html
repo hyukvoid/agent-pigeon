@@ -29,12 +29,26 @@
       </div>
     </aside>
     <main id="main">
-      <div id="empty-state">
-        <div class="empty-title">Select a session</div>
-        <div class="empty-sub">Pick a session on the left to see its flight record.<br/>Everything is read from your machine — nothing is uploaded.</div>
+      <div id="radar">
+        <header id="radar-head">
+          <span id="radar-title">LIVE RADAR</span>
+          <span id="radar-sub">which agent needs attention right now?</span>
+        </header>
+        <section id="radar-attention">
+          <h2 id="attention-heading">NEEDS ATTENTION</h2>
+          <div id="attention-list"></div>
+        </section>
+        <section id="radar-clear">
+          <h2 id="clear-heading">ALL CLEAR</h2>
+          <div id="clear-list"></div>
+        </section>
+        <div id="radar-foot">
+          <span id="radar-note"></span>
+        </div>
       </div>
       <div id="session-view" class="hidden">
         <header id="overview">
+          <button id="back-to-radar" title="Back to the radar">← Radar</button>
           <div id="ov-task"></div>
           <div id="ov-meta"></div>
           <div id="ov-badges"></div>

@@ -3,17 +3,44 @@
 **A flight recorder for coding agents.**
 
 See what your coding agents changed, where they failed, how they recovered,
-and what happened in parallel — in one local UI, no matter which coding tool
-produced the session.
+and **which one needs attention right now** — in one local UI, no matter
+which coding tool produced the session.
 
 ![Flight Recorder UI](docs/ui/flight-recorder-timeline.png)
 
 **Local-first · Read-only · No account · No telemetry · Nothing uploaded**
 
+## The radar
+
+The first screen is a problem-first live radar, not a dashboard. It answers
+one question in three seconds: *which agent needs attention right now?*
+
+```
+NEEDS ATTENTION 2
+
+  BLOCKED · PROVIDER/QUOTA        last observed 8m ago
+  GameProbe — Claude Code
+  Provider issue — quota exceeded
+
+  RECOVERY IN PROGRESS            last observed 31s ago
+  MA Now — Codex
+  npm test failed — 4 tests failing
+
+ALL CLEAR 3
+  ● running   Agent Pigeon   zcode   last observed: ran npm test
+  idle 7m     Trading Bench  codex   last observed: tests passed
+```
+
+Ranking is by attention, never by activity. And the radar does not lie
+about state: RUNNING appears only when the session file is provably live,
+and a session without a completion record is "idle 7m" — never "DONE".
+
+![Live Radar](docs/ui/live-radar.png)
+
 ## What it does
 
 A one-hour agent session produces thousands of log lines. Agent Pigeon turns
-them into an answer to one question: **what happened, and where did it go
+them into an answer to two questions: **what happened, and where did it go
 wrong?**
 
 - **Timeline** — the session's chronology: files read and changed, commands
@@ -38,15 +65,23 @@ an agent "thought" and never sends your code anywhere.
 ## Supported agents
 
 Support levels are honest: an adapter is only marked FULL when its format
-maps losslessly, and limitations are stated, not hidden.
+maps losslessly, and the UI never claims more than the capability matrix
+allows.
 
-| Agent | Level | Notes |
-| --- | --- | --- |
-| Pigeon JSONL | **FULL** | Reference format — any tool can emit it (spec below) |
-| Codex | **PARTIAL** | Rollout logs; no subagent records; outcomes via exit codes |
-| Claude Code | **PARTIAL** | No explicit session end; sidechains grouped under one subagent |
-| ZCode | **EXPERIMENTAL** | Reads the model-io rollout debug log; may change between versions |
-| OpenCode | UNAVAILABLE | No local session storage found to verify a format against — no adapter was guessed |
+| Agent | Level | Live activity | Explicit completion | Test outcomes | File events | Subagents |
+| --- | --- | --- | --- | --- | --- | --- |
+| Pigeon JSONL | **FULL** | YES | YES | YES | YES | YES |
+| Codex | **PARTIAL** | YES | UNKNOWN | YES | YES | NO |
+| Claude Code | **PARTIAL** | PARTIAL | NO | YES | YES | PARTIAL |
+| ZCode | **EXPERIMENTAL** | EXPERIMENTAL | UNKNOWN | PARTIAL | YES | PARTIAL |
+| OpenCode | UNAVAILABLE | — | — | — | — | — |
+
+Notes: Codex rollouts carry no subagent records and report outcomes via exit
+codes. Claude Code sessions have no explicit end record (the radar shows
+"idle Nm", never DONE) and sidechain subagents are grouped under one agent.
+ZCode support reads the model-io rollout debug log, which may change between
+versions. OpenCode: no local session storage was found to verify a format
+against — no adapter was guessed.
 
 ## Quick start
 
@@ -59,9 +94,12 @@ npm install -g agent-pigeon
 agent-pigeon ui
 ```
 
-The UI automatically discovers sessions from Claude Code, Codex and ZCode
-local history, plus any directory you pass with `--dir <path>`. Click a
-session to inspect it; sessions still being written refresh live.
+The UI opens on the live radar: blocked, failed and recovering sessions
+first, healthy ones below. It automatically discovers sessions from Claude
+Code, Codex and ZCode local history, plus any directory you pass with
+`--dir <path>`. Click a card for the full flight record — timeline, problems
+& recovery, agent graph, files touched. Sessions still being written refresh
+live.
 
 ![Problems & Recovery](docs/ui/flight-recorder-problems.png)
 

@@ -1,7 +1,7 @@
 {
   "name": "agent-pigeon",
-  "version": "0.2.0",
-  "description": "Flight recorder for coding agents. See what your agents changed, where they failed, how they recovered, and what ran in parallel — across Codex, Claude Code, ZCode and Pigeon JSONL. Local, read-only CLI + standalone web UI.",
+  "version": "0.3.0",
+  "description": "Flight recorder for coding agents. See what your agents changed, where they failed, how they recovered, and which one needs attention right now — across Codex, Claude Code, ZCode and Pigeon JSONL. Local, read-only CLI + standalone web UI.",
   "keywords": [
     "coding-agent",
     "claude-code",

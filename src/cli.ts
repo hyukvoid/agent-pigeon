@@ -302,7 +302,7 @@ async function main(): Promise<void> {
     return;
   }
   if (command === '--version' || command === '-v') {
-    process.stdout.write('agent-pigeon 0.2.0\n');
+    process.stdout.write('agent-pigeon 0.3.0\n');
     return;
   }
   if (command === 'ui') {

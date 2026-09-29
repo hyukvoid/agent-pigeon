@@ -14,9 +14,7 @@ const state = {
   pollTimer: null,
   listTimer: null,
   listRefreshTimer: null,
-};
-
-const $ = (sel) => document.querySelector(sel);
+};const $ = (sel) => document.querySelector(sel);
 
 const GLYPHS = {
   SESSION_STARTED: ['▶', 'ok'],
@@ -70,6 +68,97 @@ function el(tag, cls, text) {
 
 function esc(s) { return s; } // textContent everywhere — no HTML injection
 
+/* ---------------- live radar (v0.3 first screen) ---------------- */
+
+function fmtAgo(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return s + 's ago';
+  const m = Math.round(s / 60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+
+function renderRadar() {
+  const radar = $('#radar');
+  if (state.selectedPath) {
+    radar.classList.add('hidden');
+    return;
+  }
+  radar.classList.remove('hidden');
+  const coding = state.sessions.filter((s) => !s.pending && s.coding);
+  const needs = coding
+    .filter((s) => (s.attentionTier ?? 6) <= 3)
+    .sort((a, b) => (a.attentionTier - b.attentionTier) || (b.lastActivityMs - a.lastActivityMs));
+  const clear = coding
+    .filter((s) => (s.attentionTier ?? 6) > 3)
+    .sort((a, b) => (a.attentionTier - b.attentionTier) || (b.lastActivityMs - a.lastActivityMs));
+
+  const attentionList = $('#attention-list');
+  attentionList.textContent = '';
+  $('#attention-heading').textContent = 'NEEDS ATTENTION ' + (needs.length > 0 ? needs.length : '');
+  $('#attention-heading').classList.toggle('loud', needs.length > 0);
+  for (const item of needs) attentionList.appendChild(attentionCard(item));
+  if (needs.length === 0) {
+    attentionList.appendChild(el('div', 'radar-empty', 'Nothing needs attention. ' +
+      (coding.length > 0 ? coding.length + ' coding sessions observed.' : 'No coding sessions observed yet.')));
+  }
+
+  const clearList = $('#clear-list');
+  clearList.textContent = '';
+  $('#clear-heading').textContent = 'ALL CLEAR ' + (clear.length > 0 ? clear.length : '');
+  for (const item of clear.slice(0, 12)) clearList.appendChild(clearRow(item));
+  if (clear.length > 12) {
+    clearList.appendChild(el('div', 'radar-empty', '… and ' + (clear.length - 12) + ' more — use the session list.'));
+  }
+
+  const pendingCount = state.pending;
+  $('#radar-note').textContent = state.scanned + ' session files scanned' +
+    (pendingCount > 0 ? ' · ' + pendingCount + ' still analyzing…' : '');
+}
+
+function attentionCard(item) {
+  const card = el('div', 'attention-card tier-' + item.attentionTier);
+  card.setAttribute('role', 'button');
+  const head = el('div', 'attention-head');
+  const stateTone = item.recoveryState === 'RECOVERED' ? 'ok'
+    : (item.recoveryState === 'RECOVERY IN PROGRESS' ? 'warn' : 'err');
+  head.appendChild(el('span', 'attention-state ' + stateTone, item.recoveryState ?? item.attentionLabel));
+  if (item.problemCategory) {
+    const cat = item.problemCategory.toUpperCase() + (item.recoveryState === 'BLOCKED' && item.attentionTier === 1 ? '' : '');
+    head.appendChild(el('span', 'attention-cat', cat));
+  }
+  head.appendChild(el('span', 'attention-ago', 'last observed ' + fmtAgo(item.lastActivityMs)));
+  card.appendChild(head);
+  const title = el('div', 'attention-title');
+  title.appendChild(el('span', 'attention-project', item.project ?? item.label));
+  title.appendChild(el('span', 'attention-tool', item.adapterId));
+  card.appendChild(title);
+  if (item.problemSummary) card.appendChild(el('div', 'attention-summary', item.problemSummary));
+  const foot = el('div', 'attention-foot');
+  const obs = item.lastObserved ? 'last observed: ' + item.lastObserved : 'no activity recorded';
+  foot.appendChild(el('span', 'attention-obs', obs));
+  card.appendChild(foot);
+  card.addEventListener('click', () => selectSession(item.path));
+  return card;
+}
+
+function clearRow(item) {
+  const row = el('div', 'clear-row');
+  row.setAttribute('role', 'button');
+  const state_ = item.running ? '● running' : 'idle ' + fmtAgo(item.lastActivityMs);
+  row.appendChild(el('span', 'clear-state' + (item.running ? ' live' : ''), state_));
+  row.appendChild(el('span', 'clear-project', item.project ?? item.label));
+  row.appendChild(el('span', 'clear-tool', item.adapterId));
+  const right = el('span', 'clear-right');
+  if (item.lastObserved) right.appendChild(el('span', null, 'last observed: ' + item.lastObserved));
+  row.appendChild(right);
+  row.title = item.label;
+  row.addEventListener('click', () => selectSession(item.path));
+  return row;
+}
+
 /* ---------------- sessions list ---------------- */
 
 async function loadSessions() {
@@ -80,6 +169,7 @@ async function loadSessions() {
   state.scanned = data.scanned;
   state.pending = data.pending ?? 0;
   renderSessionList();
+  renderRadar();
   scheduleListRefresh();
 }
 
@@ -180,12 +270,24 @@ function sessionRow(item) {
 
 async function selectSession(path) {
   state.selectedPath = path;
+  $('#radar').classList.add('hidden');
+  $('#session-view').classList.remove('hidden');
   renderSessionList();
   const res = await fetch('/api/session?path=' + encodeURIComponent(path));
   if (!res.ok) { alert('Could not load session: ' + (await res.json()).error); return; }
   state.session = await res.json();
   startPolling();
   renderSession();
+}
+
+function backToRadar() {
+  state.selectedPath = null;
+  state.session = null;
+  if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+  $('#session-view').classList.add('hidden');
+  $('#radar').classList.remove('hidden');
+  liveNote(null);
+  loadSessions();
 }
 
 function liveNote(text) {
@@ -537,6 +639,7 @@ $('#mess-toggle').addEventListener('change', (e) => {
   state.messOnly = e.target.checked;
   if (state.session && state.tab === 'timeline') renderTimeline();
 });
+$('#back-to-radar').addEventListener('click', backToRadar);
 
 loadSessions();
-state.listTimer = setInterval(loadSessions, 10000);
+state.listTimer = setInterval(loadSessions, 5000);

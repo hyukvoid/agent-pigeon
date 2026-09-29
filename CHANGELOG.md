@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0 — problem-first live radar
+
+The first screen is no longer a session browser. It answers one question in
+three seconds: **which coding agent needs attention right now?**
+
+- **LIVE RADAR** — sessions ranked by attention, not activity:
+  1. BLOCKED (provider quota/auth, environment)
+  2. FAILED (unresolved coding failure in an ended session)
+  3. RECOVERY IN PROGRESS (live session with an active failure)
+  4. RUNNING · HAD PROBLEMS
+  5. RUNNING (healthy)
+  6. IDLE
+  Healthy sessions get one compact row; trouble gets the cards.
+- **Last observed** replaces "current activity": the label always names the
+  most recent observable action ("ran npm test · 31s ago"). RUNNING appears
+  only when the session file is provably live; sessions without a completion
+  record are "idle Nm" — never DONE.
+- **Adapter capability matrix** (`ADAPTER_CAPABILITIES`, exposed via
+  `/api/adapters`): what each format can prove — live activity, explicit
+  completion, test outcomes, file events, subagents. The UI never claims
+  more than the matrix allows.
+- Initial radar payload is time-budgeted with recent sessions first
+  (measured < 3 s over a 540-file real history; cached reloads ~10 ms).
+- Zero new dependencies; still 127.0.0.1-only, read-only, no network.
+
 ## 0.2.0 — cross-tool flight recorder + standalone local UI
 
 Agent Pigeon is no longer CLI-report-only and not tied to any IDE. One place

@@ -22,8 +22,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ADAPTERS, defaultSessionDirs, discoverSessionFiles, loadSessionText, detectAdapter } from '../adapters/index.js';
+import { ADAPTERS, ADAPTER_CAPABILITIES, defaultSessionDirs, discoverSessionFiles, loadSessionText, detectAdapter } from '../adapters/index.js';
 import type { DiscoveredSessionFile } from '../adapters/index.js';
+import { assessAttention, attentionSortKey } from '../pigeon/attention.js';
 import { buildSessionModel, isCodingSession } from '../pigeon/process.js';
 import { problemEventIds } from '../pigeon/select.js';
 import type { SessionModel } from '../pigeon/types.js';
@@ -76,6 +77,15 @@ export interface SessionListItem {
   pending?: boolean;
   status: string;
   running: boolean;
+  /** Radar attention tier (1 = needs attention most). Absent while pending. */
+  attentionTier?: number;
+  attentionLabel?: string;
+  /** Headline problem summary for the radar (null when clear). */
+  problemCategory?: string | null;
+  problemSummary?: string | null;
+  recoveryState?: string | null;
+  /** Human label of the last observable activity, e.g. "ran npm test". */
+  lastObserved?: string | null;
   durationMs: number | null;
   lastActivityMs: number;
   problems: number;
@@ -84,6 +94,52 @@ export interface SessionListItem {
   agents: number;
   filesChanged: number;
   sizeBytes: number;
+}
+
+const HUMANIZED_TYPES = new Set([
+  'FILE_READ', 'FILE_CREATED', 'FILE_CHANGED', 'FILE_DELETED',
+  'COMMAND_STARTED', 'COMMAND_COMPLETED',
+  'TEST_STARTED', 'TEST_PASSED', 'TEST_FAILED',
+  'BUILD_STARTED', 'BUILD_PASSED', 'BUILD_FAILED',
+]);
+
+/** "Last observed" label: the most recent observable action, evidence-only. */
+export function lastObservedLabel(model: SessionModel): string | null {
+  const timeline = model.timeline;
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const event = timeline[i]?.event;
+    if (event === undefined || !HUMANIZED_TYPES.has(event.type)) continue;
+    switch (event.type) {
+      case 'TEST_PASSED': return 'tests passed';
+      case 'TEST_FAILED': return 'tests failed';
+      case 'BUILD_PASSED': return 'build passed';
+      case 'BUILD_FAILED': return 'build failed';
+      case 'COMMAND_STARTED':
+      case 'COMMAND_COMPLETED':
+        return `ran ${trim(event.command ?? event.toolName ?? 'a command')}`;
+      case 'FILE_CHANGED': return `modified ${trim(event.filePath ?? 'a file')}`;
+      case 'FILE_CREATED': return `created ${trim(event.filePath ?? 'a file')}`;
+      case 'FILE_DELETED': return `deleted ${trim(event.filePath ?? 'a file')}`;
+      case 'FILE_READ': return `read ${trim(event.filePath ?? 'a file')}`;
+      default: return trim(event.summary ?? null);
+    }
+  }
+  // No file/command/test activity at all — fall back to the last event that
+  // carries any summary (an error, a message), skipping bookkeeping events.
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const event = timeline[i]?.event;
+    if (event === undefined) continue;
+    if (event.type === 'SESSION_STARTED' || event.type === 'SESSION_COMPLETED') continue;
+    if (typeof event.summary === 'string' && event.summary.length > 0) return trim(event.summary);
+    if (event.type === 'ERROR') return 'reported an error';
+  }
+  return null;
+}
+
+function trim(text: string | null, max = 60): string {
+  if (text === null) return 'activity';
+  const clean = text.replace(/\s+/gu, ' ').trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
 
 function uiAssetsRoot(): string {
@@ -263,6 +319,7 @@ export class PigeonUi {
       const entry = this.sessionAt(file.path);
       if (entry === null) continue;
       const model = entry.model;
+      const attention = assessAttention(model, entry.running);
       items.push({
         path: file.path,
         adapterId: entry.adapterId,
@@ -272,6 +329,12 @@ export class PigeonUi {
         coding: isCodingSession(model),
         status: entry.running ? 'RUNNING' : model.outcome.status,
         running: entry.running,
+        attentionTier: attention.tier,
+        attentionLabel: attention.label,
+        problemCategory: attention.headline?.category ?? null,
+        problemSummary: attention.headline?.summary ?? null,
+        recoveryState: attention.headline?.recoveryState ?? null,
+        lastObserved: lastObservedLabel(model),
         durationMs: model.durationMs,
         lastActivityMs: file.mtimeMs,
         problems: model.problems.length,
@@ -292,7 +355,7 @@ export class PigeonUi {
     };
 
     if (url.pathname === '/api/adapters') {
-      sendJson(200, { adapters: ADAPTERS });
+      sendJson(200, { adapters: ADAPTERS, capabilities: ADAPTER_CAPABILITIES });
       return true;
     }
     if (url.pathname === '/api/sessions') {
