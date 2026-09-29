@@ -17,8 +17,10 @@ import type {
   PigeonEvent,
   PigeonEventType,
   Problem,
+  ProblemCategory,
   ProblemKind,
   ProblemStatus,
+  ProviderDetail,
   RecoveryStep,
   SessionModel,
   TimelineEntry,
@@ -89,6 +91,57 @@ function problemKindFor(e: PigeonEvent): ProblemKind {
       return 'agent-failure';
     default:
       return 'error';
+  }
+}
+
+/**
+ * Failure taxonomy. Provider/environment failures are recognizable from the
+ * error identity only (HTTP status codes, transport errors) — never guessed
+ * from free text beyond these structured patterns.
+ */
+const PROVIDER_PATTERNS: Array<{ detail: Exclude<ProviderDetail, null>; pattern: RegExp }> = [
+  { detail: 'QUOTA', pattern: /\b402\b|quota\s*(exceeded|exhausted)|insufficient_quota|credit.{0,20}(exceeded| exhausted)|billing/iu },
+  { detail: 'AUTH', pattern: /\b40[13]\b|unauthorized|forbidden|invalid[_\s]api[_\s]?key|authentication/iu },
+  { detail: 'RATE_LIMIT', pattern: /\b429\b|rate[_\s]?limit|too\s+many\s+requests/iu },
+];
+
+const ENVIRONMENT_PATTERN = /timeout|timed\s*out|ECONNRESET|ECONNREFUSED|ENOTFOUND|EPIPE|socket\s+hang\s+up|network\s+(error|unreachable)|DNS/iu;
+
+export function classifyProblemCategory(
+  kind: ProblemKind,
+  errorIdentity: string | null,
+): { category: ProblemCategory; providerDetail: ProviderDetail } {
+  const identity = errorIdentity ?? '';
+  switch (kind) {
+    case 'test-failure':
+    case 'build-failure':
+      return { category: 'VALIDATION', providerDetail: null };
+    case 'command-failure':
+    case 'timeout':
+    case 'abort':
+      return { category: 'TOOL', providerDetail: null };
+    default: {
+      for (const { detail, pattern } of PROVIDER_PATTERNS) {
+        if (pattern.test(identity)) return { category: 'PROVIDER', providerDetail: detail };
+      }
+      if (ENVIRONMENT_PATTERN.test(identity)) return { category: 'ENVIRONMENT', providerDetail: null };
+      // API-ish errors that carry no matched signature still name their source
+      // when the identity mentions one, so "API Error: 500" reads honestly.
+      if (/\bAPI\b|overloaded|internal\s+server\s+error|\b5\d\d\b/iu.test(identity)) {
+        return { category: 'PROVIDER', providerDetail: null };
+      }
+      return { category: kind === 'agent-failure' ? 'UNKNOWN' : 'CODE', providerDetail: null };
+    }
+  }
+}
+
+/** Human label for a PROVIDER detail (used in evidence-based descriptions). */
+export function providerDetailLabel(detail: ProviderDetail): string {
+  switch (detail) {
+    case 'QUOTA': return 'quota exceeded';
+    case 'AUTH': return 'authentication failed';
+    case 'RATE_LIMIT': return 'rate limited';
+    default: return 'provider error';
   }
 }
 
@@ -198,7 +251,15 @@ export function buildSessionModel(events: PigeonEvent[], opts: ProcessOptions = 
   let sessionStatus: SessionModel['sessionStatus'] = opts.running === true ? 'RUNNING' : 'UNKNOWN';
   let endedMs: number | null = null;
   let declaredOutcome: string | null = null;
+  let project: string | null = null;
   for (const { event, ms } of indexed) {
+    if (event.type === 'SESSION_STARTED') {
+      const meta = (event.metadata ?? {}) as Record<string, unknown>;
+      if (project === null && typeof meta.cwd === 'string' && meta.cwd.length > 0) {
+        const segments = meta.cwd.replace(/[\\]+/gu, '/').split('/').filter((s) => s.length > 0);
+        project = segments[segments.length - 1] ?? null;
+      }
+    }
     if (event.type === 'SESSION_COMPLETED') {
       endedMs = ms;
       sessionStatus = 'COMPLETED';
@@ -214,19 +275,30 @@ export function buildSessionModel(events: PigeonEvent[], opts: ProcessOptions = 
   const durationMs = startMs !== null && endedMs !== null ? Math.max(0, endedMs - startMs) : null;
 
   // --- Task summary ---------------------------------------------------------
-  // Prefer the user's task message; fall back to the first message at all.
+  // Prefer the user's task message. Harness-injected user-role messages are
+  // not tasks: XML blocks (<environment_context>), slash commands (/model),
+  // injected instruction files (# AGENTS.md …), and long harness preambles.
+  // Short user messages are preferred; longer ones remain fallbacks.
+  const isTaskShaped = (s: string): boolean => !(s.startsWith('<') || s.startsWith('/') || s.startsWith('#'));
   let task: string | null = null;
+  let shortTask: string | null = null;
+  let taskUserFallback: string | null = null;
   let taskFallback: string | null = null;
   for (const { event } of indexed) {
     if (event.type !== 'MESSAGE' || typeof event.summary !== 'string' || event.summary.length === 0) continue;
     const role = (event.metadata as { role?: unknown } | null)?.role;
-    if (role === 'user' && task === null) {
-      task = event.summary.length > 120 ? `${event.summary.slice(0, 119)}…` : event.summary;
-      break;
+    if (role === 'user') {
+      if (isTaskShaped(event.summary)) {
+        if (shortTask === null && event.summary.length <= 200) {
+          shortTask = event.summary.length > 120 ? `${event.summary.slice(0, 119)}…` : event.summary;
+          break;
+        }
+        if (taskUserFallback === null) taskUserFallback = event.summary.length > 120 ? `${event.summary.slice(0, 119)}…` : event.summary;
+      }
     }
     if (taskFallback === null) taskFallback = event.summary.length > 120 ? `${event.summary.slice(0, 119)}…` : event.summary;
   }
-  if (task === null) task = taskFallback;
+  if (task === null) task = shortTask ?? taskUserFallback ?? taskFallback;
 
   // --- Agents ---------------------------------------------------------------
   const agents = new Map<string, AgentNode>();
@@ -364,7 +436,36 @@ export function buildSessionModel(events: PigeonEvent[], opts: ProcessOptions = 
     const failure = item.event;
     if (!isFailureEvent(failure)) continue;
     const kind = problemKindFor(failure);
+    const errorIdentity = firstLine(failure.error);
+    const { category, providerDetail } = classifyProblemCategory(kind, errorIdentity);
     const familyAgents = new Set(agentChain(failure.agentId ?? 'main', agents));
+
+    // Provider/environment failures are not coding failures: the code-recovery
+    // heuristic (test fail → edit → test pass) must not run against them, and
+    // a session that stops on one is BLOCKED, not FAILED.
+    if (category === 'PROVIDER' || category === 'ENVIRONMENT') {
+      const label = providerDetailLabel(providerDetail);
+      problems.push({
+        index: problems.length + 1,
+        kind,
+        category,
+        providerDetail,
+        eventId: failure.id,
+        timestampMs: item.ms,
+        agentId: failure.agentId ?? 'main',
+        description:
+          category === 'PROVIDER'
+            ? `Provider issue — ${label}`
+            : `Environment issue — ${label.replace('provider error', 'transport/network failure')}`,
+        errorIdentity,
+        followUps: [],
+        followUpCount: 0,
+        recoverySignal: null,
+        status: sessionStatus === 'RUNNING' ? 'PENDING' : 'BLOCKED',
+        attempts: 1,
+      });
+      continue;
+    }
 
     // Collect follow-up actions + search for a recovery signal. Follow-ups
     // are capped: a long unresolved stretch can contain hundreds of routine
@@ -480,13 +581,14 @@ export function buildSessionModel(events: PigeonEvent[], opts: ProcessOptions = 
       status = 'UNRESOLVED';
     }
 
-    const errorIdentity = firstLine(failure.error);
     if (errorIdentity !== null && failure.filePath !== null && failure.filePath !== undefined) {
       fileInvolved.add(failure.filePath);
     }
     problems.push({
       index: problems.length + 1,
       kind,
+      category,
+      providerDetail,
       eventId: failure.id,
       timestampMs: item.ms,
       agentId: failure.agentId ?? 'main',
@@ -520,16 +622,22 @@ export function buildSessionModel(events: PigeonEvent[], opts: ProcessOptions = 
   const unresolved = problems.filter((p) => p.status === 'UNRESOLVED').length;
   const failures = problems.reduce((n, p) => n + p.attempts, 0);
 
+  const blockedProblems = problems.filter((p) => p.status === 'BLOCKED').length;
   let outcomeStatus: OutcomeSummary['status'];
   if (declaredOutcome !== null) {
     outcomeStatus =
       declaredOutcome === 'success' ? 'SUCCESS'
         : declaredOutcome === 'failure' || declaredOutcome === 'error' ? 'FAILED'
-          : declaredOutcome === 'partial' ? 'PARTIAL' : 'UNKNOWN';
+          : declaredOutcome === 'blocked' || declaredOutcome === 'stopped' ? 'BLOCKED'
+            : declaredOutcome === 'partial' ? 'PARTIAL' : 'UNKNOWN';
   } else if (sessionStatus !== 'COMPLETED') {
     outcomeStatus = 'UNKNOWN';
   } else if (unresolved > 0) {
     outcomeStatus = 'FAILED';
+  } else if (blockedProblems > 0) {
+    // Stopped from outside the work itself (provider quota/auth, environment)
+    // with no unresolved coding failure: the honest verdict is BLOCKED.
+    outcomeStatus = 'BLOCKED';
   } else if (problems.length === 0) {
     outcomeStatus = 'SUCCESS';
   } else if (recovered === problems.length) {
@@ -595,6 +703,7 @@ export function buildSessionModel(events: PigeonEvent[], opts: ProcessOptions = 
     sessionId,
     source,
     task,
+    project,
     sessionStatus,
     startedMs: startMs,
     endedMs,
@@ -608,6 +717,34 @@ export function buildSessionModel(events: PigeonEvent[], opts: ProcessOptions = 
     routineCount,
     warnings,
   };
+}
+
+/** Event types that count as coding-work evidence (directive: discovery scope). */
+const CODING_EVENT_TYPES: readonly PigeonEventType[] = [
+  'FILE_READ',
+  'FILE_CREATED',
+  'FILE_CHANGED',
+  'FILE_DELETED',
+  'COMMAND_STARTED',
+  'COMMAND_COMPLETED',
+  'TEST_STARTED',
+  'TEST_PASSED',
+  'TEST_FAILED',
+  'BUILD_STARTED',
+  'BUILD_PASSED',
+  'BUILD_FAILED',
+  'TOOL_CALLED',
+  'TOOL_RESULT',
+];
+
+/**
+ * Whether a session shows coding-work evidence: any file operation, command,
+ * test/build run, or tool invocation. Pure-conversation sessions (a greeting,
+ * a question with no tool use) are not coding sessions — the UI lists them
+ * separately instead of pretending every chat is a flight.
+ */
+export function isCodingSession(model: SessionModel): boolean {
+  return model.timeline.some((t) => CODING_EVENT_TYPES.includes(t.event.type));
 }
 
 export const PROBLEM_STATUS_ORDER: readonly ProblemStatus[] = [

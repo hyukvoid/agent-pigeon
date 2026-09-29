@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.2.0 — cross-tool flight recorder + standalone local UI
+
+Agent Pigeon is no longer CLI-report-only and not tied to any IDE. One place
+to see what your coding agents did — across tools.
+
+- **`agent-pigeon ui`** — standalone local Flight Recorder web UI
+  (http://127.0.0.1:7676, bound to localhost only, zero runtime
+  dependencies). Session list with live "running" detection, timeline,
+  Problems & Recovery, parallel Agent Graph, Files Touched, and the
+  "Show only the mess" filter that hides routine operations.
+- **Pigeon Event Format** (`src/pigeon/`) — a normalized event model every
+  adapter emits: tool calls, file changes, commands, test/build outcomes,
+  subagent spawns, errors — with a deterministic session processor that
+  derives timeline, agent graph, per-file stats, failure chains and
+  evidence-based recovery status (RECOVERED / POSSIBLY_RECOVERED /
+  UNRESOLVED / PENDING).
+- **Adapters**: Pigeon JSONL (FULL, reference format), Codex (PARTIAL —
+  rollout parsing incl. embedded `apply_patch`, verification classification),
+  Claude Code (PARTIAL — edits, reads, verification outcomes, sidechains),
+  ZCode (EXPERIMENTAL — model-io rollout logs). OpenCode: UNAVAILABLE (no
+  local storage found to verify a format against — no guessing).
+- **`agent-pigeon session <file>`** — terminal flight-recorder overview for
+  one session file of any supported format.
+- Honest support levels: an adapter is only FULL/PARTIAL/EXPERIMENTAL when
+  verified against real local logs; limitations are listed, never hidden.
+- Failure taxonomy: problems are classified CODE / VALIDATION / TOOL /
+  ENVIRONMENT / PROVIDER (auth · quota · rate-limit). Provider and
+  environment failures never count as coding failures — a session stopped by
+  an API quota error reports "Provider issue — quota exceeded" and a BLOCKED
+  outcome, not "agent failed". Code-recovery heuristics apply only to
+  coding failures (VALIDATION/CODE/TOOL).
+- Product scope: pure-conversation sessions (no file/command/tool evidence)
+  are listed separately under "Other sessions" — the default list is a
+  coding-agent flight list.
+- Performance: 10k-event sessions process in ~50ms; the UI lists huge
+  histories progressively (time-budgeted) and throttles re-parsing of huge
+  live session files.
+
 ## 0.1.2 — version output hotfix
 
 - Fixed `--version` reporting the previous package version.

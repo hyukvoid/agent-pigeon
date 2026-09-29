@@ -270,8 +270,8 @@ describe('adapter registry', () => {
     assert.equal(model.problems.length, 2);
   });
 
-  it('discoverSessionFiles finds pigeon fixtures in a directory (read-only)', () => {
-    const found = discoverSessionFiles({ claudeDir: pigeonFixture('.'), codexDir: join(tmpdir(), 'definitely-missing-pigeon-dir') });
+  it('discoverSessionFiles finds pigeon fixtures in a directory (read-only)', async () => {
+    const found = await discoverSessionFiles({ claudeDir: pigeonFixture('.'), codexDir: join(tmpdir(), 'definitely-missing-pigeon-dir'), zcodeDir: join(tmpdir(), 'definitely-missing-pigeon-dir') });
     assert.ok(found.length >= 4);
     assert.ok(found.every((f) => f.adapterId === 'generic-jsonl'));
     // newest first

@@ -156,6 +156,8 @@ export function parseCodexPigeonSession(text: string, fallbackId = 'codex-sessio
     /** Set when the command was classified as a test/build verification run. */
     verificationKind: 'test' | 'build' | 'device' | null;
     patchEventIds?: string[];
+    /** Direct references to this patch's file events (O(1) outcome pairing). */
+    patchEvents?: PigeonEvent[];
   }
   const pending = new Map<string, PendingCall>();
   let cwd: string | null = null;
@@ -225,11 +227,11 @@ export function parseCodexPigeonSession(text: string, fallbackId = 'codex-sessio
         // exec-style command (real rollouts use both shapes).
         if (toolName === 'apply_patch' || rawInput.includes('*** Begin Patch')) {
           const patchEventIds: string[] = [];
+          const patchEvents: PigeonEvent[] = [];
           for (const { op, path } of parseApplyPatchPaths(rawInput)) {
             const type: PigeonEventType = op === 'add' ? 'FILE_CREATED' : op === 'delete' ? 'FILE_DELETED' : 'FILE_CHANGED';
             const eventId = nextId();
-            patchEventIds.push(eventId);
-            events.push({
+            const event: PigeonEvent = {
               id: eventId,
               sessionId,
               agentId: 'main',
@@ -241,7 +243,10 @@ export function parseCodexPigeonSession(text: string, fallbackId = 'codex-sessio
               status: 'running',
               summary: `${op === 'add' ? 'Created' : op === 'delete' ? 'Deleted' : 'Modified'} ${displayPath(path, cwd)}`,
               metadata: { callId },
-            });
+            };
+            patchEventIds.push(eventId);
+            patchEvents.push(event);
+            events.push(event);
           }
           if (patchEventIds.length > 0) {
             pending.set(callId, {
@@ -252,6 +257,7 @@ export function parseCodexPigeonSession(text: string, fallbackId = 'codex-sessio
               startedMs: ms,
               verificationKind: null,
               patchEventIds,
+              patchEvents,
             });
           }
         } else if (SHELL_TOOL_NAMES.has(toolName)) {
@@ -328,9 +334,8 @@ export function parseCodexPigeonSession(text: string, fallbackId = 'codex-sessio
             });
           } else {
             // The patch applied: the file events are the success record.
-            for (const id of inFlight.patchEventIds ?? []) {
-              const emitted = events.find((e) => e.id === id);
-              if (emitted !== undefined) emitted.status = 'ok';
+            for (const emitted of inFlight.patchEvents ?? []) {
+              emitted.status = 'ok';
             }
           }
         } else if (inFlight.kind === 'command') {

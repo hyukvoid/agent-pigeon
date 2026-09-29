@@ -62,7 +62,10 @@ export function renderSessionOverview(model: SessionModel): string {
     lines.push('');
     lines.push(`Problems — ${model.problems.length}`);
     for (const problem of model.problems) {
-      lines.push(`  #${problem.index} ${KIND_LABEL[problem.kind] ?? problem.kind} · ${offsetLabel(model, problem.timestampMs)} · agent ${problem.agentId}`);
+      const category = problem.providerDetail !== null
+        ? `${problem.category}/${problem.providerDetail}`
+        : problem.category;
+      lines.push(`  #${problem.index} ${KIND_LABEL[problem.kind] ?? problem.kind} [${category}] · ${offsetLabel(model, problem.timestampMs)} · agent ${problem.agentId}`);
       lines.push(`     ${problem.description}`);
       if (problem.errorIdentity !== null) lines.push(`     ${problem.errorIdentity}`);
       if (problem.followUps.length > 0) {

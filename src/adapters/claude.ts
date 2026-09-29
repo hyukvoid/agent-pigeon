@@ -85,7 +85,9 @@ function resultText(content: string | Array<{ type?: string; text?: string }> | 
 }
 
 function firstLine(text: string, max = 160): string {
-  const line = text.replace(/<[^>]+>/gu, '').split(/\r?\n/u).map((l) => l.trim()).find((l) => l.length > 0) ?? '';
+  // Strip ANSI SGR sequences (local-command stdout embeds them).
+  const clean = text.replace(/\x1b\[[0-9;]*[A-Za-z]/gu, '');
+  const line = clean.replace(/<[^>]+>/gu, '').split(/\r?\n/u).map((l) => l.trim()).find((l) => l.length > 0) ?? '';
   return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
@@ -108,6 +110,10 @@ export function parseClaudePigeonSession(text: string, fallbackId = 'claude-sess
     agentId: string;
   }
   const pending = new Map<string, PendingCall>();
+  // O(1) dedupe sets (large sessions make per-event array scans quadratic).
+  const sidechainStarted = new Set<string>();
+  const messageKeys = new Set<string>();
+  let sessionStartedEmitted = false;
 
   const lines = text.split(/\r?\n/u);
   lines.forEach((line, lineIndex) => {
@@ -130,8 +136,24 @@ export function parseClaudePigeonSession(text: string, fallbackId = 'claude-sess
       return;
     }
     const timestamp = new Date(ms).toISOString();
+    // Claude Code logs carry no session-start record; the first parsed line
+    // with the session cwd stands in (project name in the UI comes from it).
+    if (!sessionStartedEmitted) {
+      sessionStartedEmitted = true;
+      events.push({
+        id: nextId(),
+        sessionId: sessionId ?? fallbackId,
+        agentId: 'main',
+        type: 'SESSION_STARTED',
+        timestamp,
+        source: 'claude',
+        summary: cwd !== null ? `Session started in ${cwd}` : 'Session started',
+        metadata: { cwd },
+      });
+    }
     const agentId = obj.isSidechain === true ? 'sidechain' : 'main';
-    if (agentId === 'sidechain' && !events.some((e) => e.agentId === 'sidechain' && e.type === 'SUBAGENT_STARTED')) {
+    if (agentId === 'sidechain' && !sidechainStarted.has(sessionId ?? fallbackId)) {
+      sidechainStarted.add(sessionId ?? fallbackId);
       events.push({
         id: nextId(),
         sessionId: sessionId ?? fallbackId,
@@ -255,7 +277,9 @@ export function parseClaudePigeonSession(text: string, fallbackId = 'claude-sess
     for (const block of content) {
       if (block.type === 'text') {
         const summary = firstLine(block.text ?? '');
-        if (summary.length > 0 && !events.some((e) => e.type === 'MESSAGE' && e.timestamp === timestamp && e.agentId === agentId)) {
+        const messageKey = `${agentId}|${timestamp}|${summary}`;
+        if (summary.length > 0 && !messageKeys.has(messageKey)) {
+          messageKeys.add(messageKey);
           events.push({
             id: nextId(),
             sessionId: sid,

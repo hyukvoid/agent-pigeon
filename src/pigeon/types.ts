@@ -125,7 +125,17 @@ export interface AdapterInfo {
 /** Agent lifecycle status derived from events (never guessed). */
 export type AgentStatus = 'RUNNING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
 
-export type ProblemStatus = 'RECOVERED' | 'POSSIBLY_RECOVERED' | 'UNRESOLVED' | 'PENDING';
+export type ProblemStatus = 'RECOVERED' | 'POSSIBLY_RECOVERED' | 'UNRESOLVED' | 'PENDING' | 'BLOCKED';
+
+/**
+ * Failure taxonomy. CODE/VALIDATION are about the work itself; TOOL is the
+ * harness misfiring; PROVIDER/ENVIRONMENT are outside the agent's control
+ * and must never be presented as coding failures or "recovered".
+ */
+export type ProblemCategory = 'CODE' | 'VALIDATION' | 'TOOL' | 'ENVIRONMENT' | 'PROVIDER' | 'UNKNOWN';
+
+/** Refinement for PROVIDER problems (auth/quota/rate-limit). */
+export type ProviderDetail = 'AUTH' | 'QUOTA' | 'RATE_LIMIT' | null;
 
 export type ProblemKind =
   | 'test-failure'
@@ -187,6 +197,10 @@ export interface RecoveryStep {
 export interface Problem {
   index: number;
   kind: ProblemKind;
+  /** Failure taxonomy (see ProblemCategory). */
+  category: ProblemCategory;
+  /** Refinement for PROVIDER problems (AUTH / QUOTA / RATE_LIMIT). */
+  providerDetail: ProviderDetail;
   eventId: string;
   timestampMs: number;
   agentId: string;
@@ -206,7 +220,12 @@ export interface Problem {
 }
 
 export interface OutcomeSummary {
-  status: 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'UNKNOWN';
+  /**
+   * BLOCKED means the session was stopped from outside the work itself
+   * (provider quota/auth, environment) — not that the agent's changes
+   * failed. Coding failures unresolved give FAILED.
+   */
+  status: 'SUCCESS' | 'FAILED' | 'PARTIAL' | 'BLOCKED' | 'UNKNOWN';
   filesChanged: number;
   testsPassed: number;
   testsFailed: number;
@@ -225,6 +244,8 @@ export interface SessionModel {
   source: string;
   /** First evidenced task text (first MESSAGE from the user side, or null). */
   task: string | null;
+  /** Project/repo folder name derived from the session cwd when logged. */
+  project: string | null;
   /** 'RUNNING' only when the source shows a live/running session. */
   sessionStatus: 'RUNNING' | 'COMPLETED' | 'UNKNOWN';
   startedMs: number | null;

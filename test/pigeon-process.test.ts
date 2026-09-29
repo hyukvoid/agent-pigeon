@@ -168,17 +168,32 @@ describe('session processor — recovery detection', () => {
     assert.equal(model.outcome.status, 'SUCCESS');
   });
 
-  it('POSSIBLY_RECOVERED: error followed by an unrelated positive signal', () => {
+  it('POSSIBLY_RECOVERED: code error followed by an unrelated positive signal', () => {
     const model = buildSessionModel([
       ev(0, 'SESSION_STARTED'),
-      ev(1000, 'ERROR', { error: 'ECONNRESET while fetching', toolName: 'WebFetch' }),
+      ev(1000, 'ERROR', { error: 'TypeError: cannot read properties of undefined (reading id)', toolName: 'WebFetch' }),
       ev(3000, 'FILE_CHANGED', { filePath: 'src/client.ts' }),
       ev(8000, 'TEST_PASSED', { command: 'npm test' }),
       ev(12_000, 'SESSION_COMPLETED', { metadata: { outcome: 'success' } }),
     ]);
     const p = model.problems[0];
     assert.ok(p);
+    assert.equal(p.category, 'CODE');
     assert.equal(p.status, 'POSSIBLY_RECOVERED');
+  });
+
+  it('network/transport errors are ENVIRONMENT and never code-recovered', () => {
+    const model = buildSessionModel([
+      ev(0, 'SESSION_STARTED'),
+      ev(1000, 'ERROR', { error: 'fetch failed: ECONNRESET while fetching' }),
+      ev(3000, 'FILE_CHANGED', { filePath: 'src/client.ts' }),
+      ev(8000, 'TEST_PASSED', { command: 'npm test' }),
+      ev(12_000, 'SESSION_COMPLETED', { metadata: { outcome: 'success' } }),
+    ]);
+    const p = model.problems[0];
+    assert.ok(p);
+    assert.equal(p.category, 'ENVIRONMENT');
+    assert.equal(p.status, 'BLOCKED');
   });
 
   it('UNRESOLVED: failure with no positive signal in a completed session', () => {

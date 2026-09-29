@@ -31,19 +31,29 @@ function humanCount(n: number): string {
 
 function printHelp(): void {
   const mascot = process.stdout.isTTY ? `${DOT_PIGEON}\n` : '';
-  process.stdout.write(`${mascot}Agent Pigeon — proof-of-progress for coding agents
+  process.stdout.write(`${mascot}Agent Pigeon — flight recorder for coding agents
+
+See what your coding agents changed, where they failed, how they recovered,
+and what happened in parallel — across Codex, Claude Code, ZCode and any
+tool that emits Pigeon JSONL. Local and read-only.
 
 Usage:
+  agent-pigeon ui [options]         Launch the local Flight Recorder UI
+                                    (http://127.0.0.1:<port>)
+  agent-pigeon session <file>       Terminal overview for one session file
   agent-pigeon flight [options]     Flight report for the most recent
                                     coding session (read-only)
   agent-pigeon compare <A> <B>      Side-by-side comparison of two sessions
   agent-pigeon replay [options]     Analyze all local agent history
-  agent-pigeon session <file>       Flight recorder overview for one session
-                                    file (pigeon.jsonl, Codex, Claude Code)
   agent-pigeon share flight         SVG card for a session, printed to stdout
   agent-pigeon share compare        SVG card comparing two sessions, to stdout
   agent-pigeon --help               Show this help
   agent-pigeon --version            Show version
+
+UI options:
+  --port <n>                        Port to bind on 127.0.0.1 (default 7676)
+  --dir <path>                      Extra directory to scan for .jsonl sessions
+                                    (repeatable)
 
 Flight options:
   --session <id-prefix>             Report a specific session
@@ -57,9 +67,8 @@ Replay options:
   --claude-dir <path>               Override Claude history directory
   --codex-dir <path>                Override Codex history directory
 
-Replay reads your local session history, computes counts in memory, and
-prints a report. It creates nothing, stores nothing, and sends nothing.
-Share prints an SVG card of the same facts — also local-only.
+Everything Agent Pigeon knows comes from reading your local session files.
+It creates nothing, stores nothing, and sends nothing anywhere.
 `);
 }
 
@@ -284,7 +293,7 @@ function runCompare(idA: string | null, idB: string | null): void {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const command = argv[0];
 
@@ -293,7 +302,35 @@ function main(): void {
     return;
   }
   if (command === '--version' || command === '-v') {
-    process.stdout.write('agent-pigeon 0.1.2\n');
+    process.stdout.write('agent-pigeon 0.2.0\n');
+    return;
+  }
+  if (command === 'ui') {
+    const { PigeonUi } = await import('./ui/server.js');
+    const opts: { port?: number; extraDirs?: string[] } = {};
+    const extraDirs: string[] = [];
+    for (let i = 1; i < argv.length; i++) {
+      const a = argv[i];
+      if (a === '--port') {
+        const n = Number(argv[i + 1]);
+        if (!Number.isFinite(n) || n <= 0) throw new Error(`--port expects a number, got ${argv[i + 1] ?? '(missing)'}`);
+        opts.port = Math.floor(n);
+        i++;
+      } else if (a === '--dir') {
+        const dir = argv[i + 1];
+        if (dir === undefined || dir.length === 0) throw new Error('--dir expects a path');
+        extraDirs.push(dir);
+        i++;
+      } else throw new Error(`unknown option: ${a ?? '(empty)'}`);
+    }
+    if (extraDirs.length > 0) opts.extraDirs = extraDirs;
+    const ui = new PigeonUi(opts);
+    const server = await ui.listen(opts.port ?? 7676);
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : opts.port ?? 7676;
+    process.stdout.write(`Agent Pigeon — flight recorder listening on http://127.0.0.1:${port}\n`);
+    process.stdout.write('Local only: reads your coding-agent session files read-only; stores and sends nothing.\n');
+    process.stdout.write('Press Ctrl+C to stop.\n');
     return;
   }
   if (command === 'replay') {
@@ -354,9 +391,7 @@ function main(): void {
   throw new Error(`unknown command: ${command} (try 'agent-pigeon --help')`);
 }
 
-try {
-  main();
-} catch (error: unknown) {
+main().catch((error: unknown) => {
   process.stderr.write(`agent-pigeon: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
-}
+});

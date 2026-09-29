@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Pigeon — Flight Recorder</title>
+  <link rel="stylesheet" href="/app.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='24' font-size='24'%3E%F0%9F%95%8A%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div id="brand">
+        <span id="brand-name">Agent Pigeon</span>
+        <span id="brand-sub">flight recorder · local</span>
+      </div>
+      <input id="search" type="search" placeholder="Search task or session…" autocomplete="off" />
+      <div id="filters">
+        <button class="filter active" data-filter="all">All</button>
+        <button class="filter" data-filter="running">● Running</button>
+        <button class="filter" data-filter="success">✓ Success</button>
+        <button class="filter" data-filter="failed">✕ Failed</button>
+        <button class="filter" data-filter="problems">⚑ Has problems</button>
+      </div>
+      <div id="session-list" role="list"></div>
+      <div id="sidebar-foot">
+        <span id="scan-info"></span>
+        <button id="refresh" title="Rescan local histories">↻ Rescan</button>
+      </div>
+    </aside>
+    <main id="main">
+      <div id="empty-state">
+        <div class="empty-title">Select a session</div>
+        <div class="empty-sub">Pick a session on the left to see its flight record.<br/>Everything is read from your machine — nothing is uploaded.</div>
+      </div>
+      <div id="session-view" class="hidden">
+        <header id="overview">
+          <div id="ov-task"></div>
+          <div id="ov-meta"></div>
+          <div id="ov-badges"></div>
+        </header>
+        <nav id="tabs">
+          <button class="tab active" data-tab="timeline">Timeline</button>
+          <button class="tab" data-tab="problems">Problems &amp; Recovery</button>
+          <button class="tab" data-tab="agents">Agent Graph</button>
+          <button class="tab" data-tab="files">Files Touched</button>
+          <span id="tab-right">
+            <label id="mess-toggle-wrap" title="Hide routine operations — show only failures, recovery work and retries">
+              <input type="checkbox" id="mess-toggle" />
+              Show only the mess
+            </label>
+            <span id="live-indicator" class="hidden">● live — refreshing</span>
+          </span>
+        </nav>
+        <section id="panel"></section>
+      </div>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
