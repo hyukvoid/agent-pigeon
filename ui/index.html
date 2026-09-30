@@ -17,10 +17,10 @@
       <input id="search" type="search" placeholder="Search task or session…" autocomplete="off" />
       <div id="filters">
         <button class="filter active" data-filter="all">All</button>
-        <button class="filter" data-filter="running">● Running</button>
-        <button class="filter" data-filter="success">✓ Success</button>
-        <button class="filter" data-filter="failed">✕ Failed</button>
-        <button class="filter" data-filter="problems">⚑ Has problems</button>
+        <button class="filter" data-filter="running">Running</button>
+        <button class="filter" data-filter="success">Success</button>
+        <button class="filter" data-filter="failed">Failed</button>
+        <button class="filter" data-filter="problems">Has problems</button>
       </div>
       <div id="session-list" role="list"></div>
       <div id="sidebar-foot">
@@ -30,21 +30,14 @@
     </aside>
     <main id="main">
       <div id="radar">
-        <header id="radar-head">
-          <span id="radar-title">LIVE RADAR</span>
-          <span id="radar-sub">which agent needs attention right now?</span>
-        </header>
         <section id="radar-attention">
-          <h2 id="attention-heading">NEEDS ATTENTION</h2>
+          <h2 id="attention-heading">Needs attention</h2>
           <div id="attention-list"></div>
         </section>
         <section id="radar-clear">
-          <h2 id="clear-heading">ALL CLEAR</h2>
+          <h2 id="clear-heading">Everything else</h2>
           <div id="clear-list"></div>
         </section>
-        <div id="radar-foot">
-          <span id="radar-note"></span>
-        </div>
       </div>
       <div id="session-view" class="hidden">
         <header id="overview">
@@ -70,6 +63,6 @@
       </div>
     </main>
   </div>
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

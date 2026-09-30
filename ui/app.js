@@ -1,4 +1,6 @@
 /* Agent Pigeon flight recorder — vanilla JS, no external assets (local-first). */
+import { cleanLastObserved, looksLikeHarnessText } from '/format.js';
+
 'use strict';
 
 const state = {
@@ -97,25 +99,23 @@ function renderRadar() {
 
   const attentionList = $('#attention-list');
   attentionList.textContent = '';
-  $('#attention-heading').textContent = 'NEEDS ATTENTION ' + (needs.length > 0 ? needs.length : '');
+  $('#attention-heading').textContent = 'Needs attention' + (needs.length > 0 ? ` (${needs.length})` : '');
   $('#attention-heading').classList.toggle('loud', needs.length > 0);
   for (const item of needs) attentionList.appendChild(attentionCard(item));
   if (needs.length === 0) {
-    attentionList.appendChild(el('div', 'radar-empty', 'Nothing needs attention. ' +
-      (coding.length > 0 ? coding.length + ' coding sessions observed.' : 'No coding sessions observed yet.')));
+    const empty = el('div', 'radar-empty');
+    empty.appendChild(el('span', 'radar-clear-line', 'No problems detected.'));
+    if (coding.length > 0) empty.appendChild(el('span', 'radar-clear-meta', `${coding.length} active`));
+    attentionList.appendChild(empty);
   }
 
   const clearList = $('#clear-list');
   clearList.textContent = '';
-  $('#clear-heading').textContent = 'ALL CLEAR ' + (clear.length > 0 ? clear.length : '');
+  $('#clear-heading').textContent = 'Everything else' + (clear.length > 0 ? ` (${clear.length})` : '');
   for (const item of clear.slice(0, 12)) clearList.appendChild(clearRow(item));
   if (clear.length > 12) {
     clearList.appendChild(el('div', 'radar-empty', '… and ' + (clear.length - 12) + ' more — use the session list.'));
   }
-
-  const pendingCount = state.pending;
-  $('#radar-note').textContent = state.scanned + ' session files scanned' +
-    (pendingCount > 0 ? ' · ' + pendingCount + ' still analyzing…' : '');
 }
 
 function attentionCard(item) {
@@ -147,14 +147,18 @@ function attentionCard(item) {
 function clearRow(item) {
   const row = el('div', 'clear-row');
   row.setAttribute('role', 'button');
-  const state_ = item.running ? '● running' : 'idle ' + fmtAgo(item.lastActivityMs);
-  row.appendChild(el('span', 'clear-state' + (item.running ? ' live' : ''), state_));
+  const dot = el('span', 'clear-dot' + (item.running ? ' live' : ''), '●');
+  dot.title = item.running ? 'running' : 'idle';
+  row.appendChild(dot);
   row.appendChild(el('span', 'clear-project', item.project ?? item.label));
+  const task = item.label ?? '';
+  const taskUsable = item.project !== null && task.length > 0 && task !== item.project &&
+    !looksLikeHarnessText(task);
+  if (taskUsable) row.appendChild(el('span', 'clear-task', task));
   row.appendChild(el('span', 'clear-tool', item.adapterId));
-  const right = el('span', 'clear-right');
-  if (item.lastObserved) right.appendChild(el('span', null, 'last observed: ' + item.lastObserved));
-  row.appendChild(right);
-  row.title = item.label;
+  const obs = item.lastObserved ? cleanLastObserved(item.lastObserved) : null;
+  if (obs) row.appendChild(el('span', 'clear-obs', obs + ', ' + fmtAgo(item.lastActivityMs)));
+  row.title = task;
   row.addEventListener('click', () => selectSession(item.path));
   return row;
 }
@@ -205,8 +209,13 @@ function renderSessionList() {
   const list = $('#session-list');
   list.textContent = '';
   const items = state.sessions.filter(passesFilter);
-  const coding = items.filter((i) => i.coding || i.pending);
-  const other = items.filter((i) => !i.coding && !i.pending);
+  const pendingCount = items.filter((i) => i.pending).length;
+  const coding = items.filter((i) => !i.pending && i.coding);
+  const other = items.filter((i) => !i.pending && !i.coding);
+
+  if (pendingCount > 0) {
+    list.appendChild(el('div', 'analyzing-row', `Analyzing ${pendingCount} session${pendingCount === 1 ? '' : 's'}…`));
+  }
   let currentDay = null;
   for (const item of coding) {
     const day = groupLabel(item.lastActivityMs);
@@ -216,14 +225,14 @@ function renderSessionList() {
     }
     list.appendChild(sessionRow(item));
   }
-  if (coding.length === 0) {
+  if (coding.length === 0 && pendingCount === 0) {
     list.appendChild(el('div', 'footnote', 'No coding sessions match. Run a coding agent, or check the scanned directories.'));
   }
   // Pure-conversation sessions are not flights — keep them accessible but
   // out of the main list (collapsed by default).
   if (other.length > 0) {
     const head = el('div', 'day-heading other-toggle');
-    head.textContent = '▶ Other sessions (' + other.length + ') — not coding';
+    head.textContent = '▶ Other sessions (' + other.length + ')';
     head.style.cursor = 'pointer';
     const container = el('div');
     const renderOther = () => {
@@ -232,28 +241,43 @@ function renderSessionList() {
     };
     head.addEventListener('click', () => {
       const expanded = container.childElementCount > 0;
-      head.textContent = (expanded ? '▶ ' : '▼ ') + 'Other sessions (' + other.length + ') — not coding';
+      head.textContent = (expanded ? '▶ ' : '▼ ') + 'Other sessions (' + other.length + ')';
       if (expanded) container.textContent = '';
       else renderOther();
     });
     list.appendChild(head);
     list.appendChild(container);
   }
-  $('#scan-info').textContent = state.scanned + ' session files scanned';
 }
 
 function sessionRow(item) {
-  const row = el('div', 'session-item' + (item.pending ? ' pending-row' : '') + (item.path === state.selectedPath ? ' selected' : ''));
+  const row = el('div', 'session-item' + (item.path === state.selectedPath ? ' selected' : ''));
   row.setAttribute('role', 'listitem');
+
+  // Title priority: project first; a harness-sounding task drops to the
+  // secondary line (or stays as title when there is nothing else to show).
+  const task = item.label ?? '';
+  const taskIsHarness = item.project !== null && task.length > 0 && looksLikeHarnessText(task);
+  const title = item.project ?? (task.length > 0 ? task : 'Untitled session');
+
   const line1 = el('div', 'session-line1');
-  line1.appendChild(el('span', 'session-label', item.label));
-  line1.appendChild(el('span', 'status ' + item.status, item.pending ? '…' : item.status));
+  line1.appendChild(el('span', 'session-label', title));
+  const stateTone = item.status === 'FAILED' || item.status === 'PARTIAL' ? 'alert'
+    : item.status === 'RUNNING' ? 'info' : null;
+  if (stateTone !== null) {
+    line1.appendChild(el('span', 'status ' + item.status.toLowerCase() + (stateTone === 'alert' ? ' alert' : ''), item.status === 'RUNNING' ? 'running' : item.status));
+  } else {
+    line1.appendChild(el('span', 'status-dot', '●'));
+  }
   row.appendChild(line1);
+
   const line2 = el('div', 'session-line2');
   if (item.pending) {
     line2.appendChild(el('span', null, 'analyzing…'));
   } else {
-    if (item.project) line2.appendChild(el('span', null, item.project));
+    if (item.project !== null && task.length > 0 && !taskIsHarness && task !== title) {
+      line2.appendChild(el('span', 'session-task', task));
+    }
     line2.appendChild(el('span', null, fmtDuration(item.durationMs)));
     if (item.problems > 0) {
       line2.appendChild(el('span', 'prob-count', '⚑ ' + item.problems + (item.recovered > 0 ? ' · ' + item.recovered + ' rec' : '')));
@@ -261,7 +285,7 @@ function sessionRow(item) {
     line2.appendChild(el('span', null, item.adapterId));
   }
   row.appendChild(line2);
-  row.title = item.pending ? item.path : item.label + ' — ' + (item.project ?? 'unknown project') + ' · ' + item.sessionId;
+  row.title = item.pending ? 'analyzing' : task + ' — ' + (item.project ?? 'unknown project') + ' · ' + item.sessionId;
   row.addEventListener('click', () => selectSession(item.path));
   return row;
 }
@@ -348,19 +372,13 @@ function renderSession() {
     (model.outcome.unresolved > 0 ? ' · unresolved ' + model.outcome.unresolved : ''));
   const badges = $('#ov-badges');
   badges.textContent = '';
-  badges.appendChild(el('span', 'badge ' + (running ? 'RUNNING' : model.outcome.status), running ? '● RUNNING' : model.outcome.status));
+  badges.appendChild(el('span', 'badge ' + (running ? 'RUNNING' : model.outcome.status), running ? '● running' : model.outcome.status));
   if (model.problems.length > 0) {
     badges.appendChild(el('span', 'badge problems', '⚑ ' + model.problems.length + ' problem' + (model.problems.length === 1 ? '' : 's')));
   }
   badges.appendChild(el('span', 'badge', adapterId));
+  badges.appendChild(el('span', 'badge muted', 'session ' + model.sessionId + (model.project ? ' · ' + model.project : '')));
   for (const w of model.warnings.slice(0, 2)) badges.appendChild(el('span', 'badge', w));
-  const metaLine = $('#ov-session-id') ?? (() => {
-    const node = el('div', 'footnote');
-    node.id = 'ov-session-id';
-    $('#overview').appendChild(node);
-    return node;
-  })();
-  metaLine.textContent = 'session ' + model.sessionId + (model.project ? ' · ' + model.project : '');
 
   renderPanel();
 }
